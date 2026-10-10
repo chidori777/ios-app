@@ -65,7 +65,9 @@ this old, so the App Store version requires iOS 15 or later.
 These devices **cannot get new App Store updates**. The App Store offers them
 the last compatible version, 1.2.5. Later fixes and features are only available
 from the universal IPA attached to each
-[GitHub release](https://github.com/ha-dashboard/ios-app/releases):
+[GitHub release](https://github.com/ha-dashboard/ios-app/releases). Direct link
+to the latest one, which also works in older Safari:
+[HADashboard-universal.ipa](https://github.com/ha-dashboard/ios-app/releases/latest/download/HADashboard-universal.ipa)
 
 - **Jailbroken devices:** install the IPA with AppSync Unified or a similar tool.
 - **Not jailbroken:** sideload the IPA with a tool such as

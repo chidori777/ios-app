@@ -73,6 +73,14 @@
 
     .app-store-badge:hover { opacity: 0.85; }
 
+    .legacy-download {
+      margin-top: 12px;
+      font-size: 14px;
+      opacity: 0.85;
+    }
+
+    .legacy-download a { color: inherit; text-decoration: underline; }
+
     .app-store-badge img {
       height: 48px;
     }
@@ -188,6 +196,7 @@
         <a href="https://apps.apple.com/gb/app/ha-dash/id6759347912" class="app-store-badge">
           <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" alt="Download on the App Store">
         </a>
+        <p class="legacy-download">Older iPad or iPhone (iOS 9.3.3–14)? <a href="https://github.com/ha-dashboard/ios-app/releases/latest/download/HADashboard-universal.ipa">Download the universal IPA</a> (latest release, for jailbroken or sideloaded installs).</p>
       </div>
     </div>
   </header>
@@ -226,7 +235,7 @@
       <ul>
         <li>A running Home Assistant instance (local network or remote via HTTPS)</li>
         <li>At least one Lovelace dashboard configured</li>
-        <li>An iPad or iPhone running iOS 15 or later for HA Dash 1.2.6 from the App Store. The universal developer build supports iOS 9.3.3+, and Local Camera Stream requires iOS 10.3.3+</li>
+        <li>An iPad or iPhone running iOS 15 or later for HA Dash from the App Store. Older devices (iOS 9.3.3–14) can use the <a href="https://github.com/ha-dashboard/ios-app/releases/latest/download/HADashboard-universal.ipa">universal IPA</a> from the latest release; Local Camera Stream requires iOS 10.3.3+</li>
       </ul>
       <p>No Home Assistant server? Use <strong>Demo Mode</strong> to explore the app with built-in sample dashboards.</p>
     </section>

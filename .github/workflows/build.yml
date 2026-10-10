@@ -620,6 +620,9 @@ jobs:
           ADHOC_IPA=$(find build/adhoc -name "*.ipa" | head -1)
           if [ -n "$ADHOC_IPA" ]; then
             mv "$ADHOC_IPA" "build/HADashboard-${VERSION}-universal-armv7-arm64.ipa"
+            # Fixed-name copy so releases/latest/download/HADashboard-universal.ipa
+            # always points at the newest build (linked from README and the site).
+            cp "build/HADashboard-${VERSION}-universal-armv7-arm64.ipa" build/HADashboard-universal.ipa
           fi
 
       - name: Verify exported Ad Hoc IPA
@@ -745,6 +748,7 @@ jobs:
         with:
           files: |
             build/HADashboard-*-universal-armv7-arm64.ipa
+            build/HADashboard-universal.ipa
             build/HADashboard-*.dSYM.zip
             build/HADashboard-*-dSYM-uuids.txt
           body_path: docs/releases/${{ github.ref_name }}-github.md
