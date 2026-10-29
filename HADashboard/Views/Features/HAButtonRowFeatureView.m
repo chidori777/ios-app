@@ -198,7 +198,8 @@
 
     UIButton *minusBtn = [self makeButtonWithTitle:@"\u2212" tag:40]; // −
     minusBtn.enabled = available;
-    [minusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
+    // Large touch targets: each button takes about a third of the row.
+    minusBtn.titleLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightSemibold];
     [minusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
     self.tempValueLabel = [[UILabel alloc] init];
@@ -214,14 +215,32 @@
 
     UIButton *plusBtn = [self makeButtonWithTitle:@"+" tag:41];
     plusBtn.enabled = available;
-    [plusBtn.widthAnchor constraintEqualToConstant:44].active = YES;
+    plusBtn.titleLabel.font = [UIFont systemFontOfSize:22 weight:UIFontWeightSemibold];
     [plusBtn setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
     [self.buttonStack addArrangedSubview:minusBtn];
     [self.buttonStack addArrangedSubview:self.tempValueLabel];
     [self.buttonStack addArrangedSubview:plusBtn];
+    // Width relative to the row: only valid once the buttons are in the stack.
+    [minusBtn.widthAnchor constraintEqualToAnchor:self.buttonStack.widthAnchor multiplier:0.32].active = YES;
+    [plusBtn.widthAnchor constraintEqualToAnchor:self.buttonStack.widthAnchor multiplier:0.32].active = YES;
 
     self.buttons = @[minusBtn, plusBtn];
+
+    // Swallow taps that land between the buttons: they must not fall through
+    // to the tile and open its detail sheet. The buttons still get their taps.
+    BOOL hasSwallow = NO;
+    for (UIGestureRecognizer *g in self.gestureRecognizers) {
+        if ([g isKindOfClass:[UITapGestureRecognizer class]]) hasSwallow = YES;
+    }
+    if (!hasSwallow) {
+        UITapGestureRecognizer *swallow = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(swallowTap:)];
+        [self addGestureRecognizer:swallow];
+    }
+}
+
+- (void)swallowTap:(UITapGestureRecognizer *)gesture {
+    // Intentionally empty: consumes taps around the -/+ buttons.
 }
 
 #pragma mark - Button Factory
