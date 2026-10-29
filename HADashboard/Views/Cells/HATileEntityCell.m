@@ -31,6 +31,9 @@
 /// Features below the tile area (default) vs. on the title row (features_position: inline)
 @property (nonatomic, strong) NSArray<NSLayoutConstraint *> *featuresStackedConstraints;
 @property (nonatomic, strong) NSArray<NSLayoutConstraint *> *featuresInlineConstraints;
+/// YES when the card configures its own hold_action (run by the dashboard):
+/// the tile's built-in long-press toggle must then stay out of the way.
+@property (nonatomic, assign) BOOL hasConfiguredHoldAction;
 @end
 
 @implementation HATileEntityCell
@@ -256,6 +259,7 @@
 
 - (void)configureWithEntity:(HAEntity *)entity configItem:(HADashboardConfigItem *)configItem {
     [super configureWithEntity:entity configItem:configItem];
+    self.hasConfiguredHoldAction = [configItem.customProperties[@"hold_action"] isKindOfClass:[NSDictionary class]];
     self.nameLabel.hidden = YES;
     self.stateLabel.hidden = YES;
 
@@ -521,6 +525,8 @@
     // Thermostats: long press shows heating time (handled by the dashboard),
     // never a blind toggle that would switch the heating off.
     if ([[self.entity domain] isEqualToString:@"climate"]) return;
+    // A configured hold_action (e.g. open a light group's sheet) replaces the toggle.
+    if (self.hasConfiguredHoldAction) return;
 
     [HAHaptics mediumImpact];
 
