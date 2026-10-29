@@ -10,20 +10,68 @@
 > Ce fork ajoute seulement quelques modifications pour mon usage (iPad Air 1 sous iOS 12, en mural),
 > publiées sous la même licence [Apache 2.0](LICENSE).
 >
-> ### Modifications apportées dans ce fork
+> ### Ce que ce fork ajoute
 >
-> - **Onglets en « pilules »** arrondis à la place du sélecteur iOS classique.
-> - **Sections pleine largeur** (`column_span` des tableaux de bord HA) avec titre centré et cadre arrondi.
-> - **Thermostats** : fiche avec résumé (température, consigne, chauffe en cours, planning `schedule.*`)
->   et graphique température + consigne avec les **périodes de chauffe surlignées** ;
->   **appui long** : durée de chauffe du jour, de la semaine et du mois.
-> - **Température / humidité** : graphique des deux courbes, case à cocher pour superposer la
->   **température extérieure** (capteur extérieur, sinon entité météo).
-> - **Fiches simplifiées** : plus de « Flash », « Transition » ni de liste technique des attributs.
-> - **Listes (`entities`)** : les `tap_action` des lignes (dont la redirection `entity`) sont respectés.
-> - **Tuiles** : `features_position: inline` (boutons − / + sur la ligne du titre).
-> - **Thème sombre** plus lisible.
-> - Correctif : le graphique ne disparaît plus après un double appui.
+> **Mise en page**
+> - **Onglets en « pilules »** arrondis, l'onglet actif en couleur d'accent.
+> - **Sections pleine largeur** : une section avec `column_span: 2` (ou plus) occupe toute la largeur,
+>   titre centré et **cadre arrondi** pour la mettre en avant (ex. « Commandes générales » en haut de page).
+> - **Sous-titres dans une section** : une carte `heading` placée dans une section devient un sous-titre
+>   pleine largeur (ex. « Éclairage » et « Chauffage » dans un même bloc).
+> - **Pièces alignées** : quand deux sections sont côte à côte, la dernière tuile de la plus courte
+>   descend pour s'aligner sur l'autre ; les blocs ont la même hauteur même si une pièce a une ligne de moins.
+>
+> **Chauffage (entités `climate`)**
+> - **Appui court** : fiche avec un résumé (température, consigne, chauffe en cours, prochain changement
+>   du planning `schedule.*`) et un graphique température + consigne où les **périodes de chauffe sont surlignées**.
+> - **Appui long** : temps de chauffe **du jour, de la semaine et du mois** (calculé depuis l'historique HA).
+> - **Boutons − / + plus grands** sur les tuiles thermostat ; un appui à côté n'ouvre plus la fiche par erreur.
+>
+> **Température et humidité**
+> - Fiche d'un capteur de température ou d'humidité : graphique **température (vert)** + **humidité (bleu)**
+>   sur 1 h, 6 h, 24 h ou 7 jours.
+> - Case **« Afficher l'extérieur »** : ajoute la température extérieure en **rouge** (capteur extérieur
+>   détecté automatiquement, sinon l'entité `weather`). Le choix est mémorisé.
+> - Poser le doigt sur un graphique et le faire glisser affiche la valeur à l'heure précise.
+>
+> **Lumières et actions**
+> - **Fiches lumière épurées** : on garde l'essentiel (allumage, luminosité, couleur), sans « Flash »,
+>   « Transition », historique ni liste technique des attributs.
+> - **`tap_action` / `hold_action` respectés** sur les lignes de liste (`entities`) et les tuiles, y compris
+>   `more-info` vers une autre entité (`entity: ...`). Utile pour ouvrir le menu d'une vraie lampe par un
+>   appui long sur un raccourci.
+>
+> **Divers** : thème sombre plus lisible ; le graphique ne disparaît plus après plusieurs appuis.
+>
+> ### En pratique, dans votre tableau de bord HA
+>
+> Rien à installer côté Home Assistant : l'app lit vos tableaux de bord habituels (vue de type
+> **sections**, `max_columns: 2` conseillé sur iPad). Exemple de bloc de commandes en haut de page :
+>
+> ```yaml
+> - type: grid
+>   column_span: 2              # pleine largeur + cadre
+>   cards:
+>     - type: heading
+>       heading: Commandes générales   # 1er heading = titre de la section
+>     - type: heading
+>       heading: Éclairage      # sous-titre
+>     - type: tile
+>       entity: switch.salon
+>       hold_action:            # appui long = menu de la vraie lampe
+>         action: more-info
+>         entity: light.salon
+>     - type: heading
+>       heading: Chauffage
+>     - type: tile
+>       entity: climate.salon
+>       features:
+>         - type: target-temperature   # boutons − / +
+> ```
+>
+> Pour une pièce, une liste `entities` (température, éclairage) suivie d'une tuile `climate` suffit :
+> l'appui sur la température ouvre le graphique, l'appui sur le thermostat ouvre le résumé du chauffage.
+> Après une modification dans HA : réglages de l'app → **Clear Cache & Reload**.
 >
 > ### Installation (tous les iOS, de 9.3.3 à aujourd'hui)
 >
@@ -52,9 +100,12 @@
 >
 > **This is not my app.** HA Dashboard was created by **Ash Hopkins** (with contributions from Sinan Yasar,
 > Matthew Robertson and sharpyexe): **[ha-dashboard/ios-app](https://github.com/ha-dashboard/ios-app)**.
-> This fork only adds a few changes for my own wall-mounted iPad Air 1 (pill-style view tabs, full-width
-> framed sections, thermostat summary with heating periods and heating time, temperature/humidity graphs
-> with an outdoor overlay, simplified detail sheets, a few fixes), released under the same Apache 2.0 license.
+> This fork only adds a few changes for my own wall-mounted iPad Air 1, released under the same Apache 2.0
+> license: pill-style view tabs; full-width framed sections (`column_span`) with `heading` sub-titles;
+> side-by-side sections bottom-aligned to equal height; thermostat sheet with summary, schedule and
+> highlighted heating periods, long press for today/week/month heating time, larger − / + buttons;
+> temperature (green) + humidity (blue) graphs with an optional outdoor curve (red); simplified light
+> sheets; `tap_action` / `hold_action` honoured on entities rows and tiles; a more readable dark theme.
 >
 > The IPA in **[Releases](https://github.com/chidori777/ios-app/releases)** is universal (armv7 + arm64,
 > iOS 9.3.3 and later) and unsigned: install it with Sideloadly (free Apple ID: re-sign every 7 days),
