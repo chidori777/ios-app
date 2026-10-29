@@ -226,7 +226,26 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             for (NSUInteger cardIdx = 0; cardIdx < sectionCards.count; cardIdx++) {
                 NSDictionary *card = sectionCards[cardIdx];
                 if (![card isKindOfClass:[NSDictionary class]]) continue;
-                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) continue;
+                if ([HASafeDictStringOrNil(card, @"type") isEqualToString:@"heading"]) {
+                    // A heading inside the section (not the one used as the section
+                    // title) becomes a full-width sub-heading item, e.g. "Éclairage" /
+                    // "Chauffage" groups within one section.
+                    NSString *headingText = HASafeDictStringOrNil(card, @"heading");
+                    if (headingText.length == 0 || [headingText isEqualToString:haSectionTitle]) continue;
+                    HADashboardConfigItem *headingItem = [[HADashboardConfigItem alloc] init];
+                    headingItem.cardType = @"heading";
+                    headingItem.displayName = headingText;
+                    headingItem.columnSpan = 12;
+                    headingItem.rowSpan = 1;
+                    NSString *headingIcon = HASafeDictStringOrNil(card, @"icon");
+                    if (headingIcon.length > 0) headingItem.customProperties = @{@"icon": headingIcon};
+                    HADashboardConfigSection *headingSection = [[HADashboardConfigSection alloc] init];
+                    headingSection.cardType = @"heading";
+                    headingSection.items = @[headingItem];
+                    headingSection.entityIds = @[];
+                    [cardSections addObject:headingSection];
+                    continue;
+                }
 
                 // Sections view: scale grid_options.columns from HA's section grid to our 12-col sub-grid
                 NSInteger sectionGridMax = (view.maxColumns > 0) ? view.maxColumns : 4;
