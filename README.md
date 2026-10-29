@@ -1,3 +1,70 @@
+> ## 🇫🇷 À propos de ce fork
+>
+> **HA Dashboard** est une application iOS native qui affiche vos tableaux de bord
+> [Home Assistant](https://www.home-assistant.io/) de façon fluide, même sur de très vieux iPad
+> (iPad 2, iPad Air 1, iPad mini…).
+>
+> **Ce n'est pas mon application.** L'auteur d'origine est **Ash Hopkins**, avec les contributions de
+> Sinan Yasar, Matthew Robertson et sharpyexe. Projet d'origine :
+> **[ha-dashboard/ios-app](https://github.com/ha-dashboard/ios-app)**. Tout le mérite leur revient.
+> Ce fork ajoute seulement quelques modifications pour mon usage (iPad Air 1 sous iOS 12, en mural),
+> publiées sous la même licence [Apache 2.0](LICENSE).
+>
+> ### Modifications apportées dans ce fork
+>
+> - **Onglets en « pilules »** arrondis à la place du sélecteur iOS classique.
+> - **Sections pleine largeur** (`column_span` des tableaux de bord HA) avec titre centré et cadre arrondi.
+> - **Thermostats** : fiche avec résumé (température, consigne, chauffe en cours, planning `schedule.*`)
+>   et graphique température + consigne avec les **périodes de chauffe surlignées** ;
+>   **appui long** : durée de chauffe du jour, de la semaine et du mois.
+> - **Température / humidité** : graphique des deux courbes, case à cocher pour superposer la
+>   **température extérieure** (capteur extérieur, sinon entité météo).
+> - **Fiches simplifiées** : plus de « Flash », « Transition » ni de liste technique des attributs.
+> - **Listes (`entities`)** : les `tap_action` des lignes (dont la redirection `entity`) sont respectés.
+> - **Tuiles** : `features_position: inline` (boutons − / + sur la ligne du titre).
+> - **Thème sombre** plus lisible.
+> - Correctif : le graphique ne disparaît plus après un double appui.
+>
+> ### Installation (tous les iOS, de 9.3.3 à aujourd'hui)
+>
+> L'IPA publiée ici est **universelle** (armv7 + arm64, iOS 9 minimum) : la même fonctionne sur les
+> vieux iPad comme sur les récents. Téléchargez `HADashboard-ipad.ipa` dans la dernière version de la page
+> **[Releases](https://github.com/chidori777/ios-app/releases)**. Elle n'est pas signée : il faut la signer
+> à l'installation.
+>
+> | Votre appareil | Méthode |
+> |---|---|
+> | Non jailbreaké, n'importe quel iOS | [Sideloadly](https://sideloadly.io/) (Windows / macOS) + votre identifiant Apple. Avec un compte Apple **gratuit**, l'app doit être réinstallée **tous les 7 jours** (1 an avec un compte développeur payant). |
+> | iOS 14.0 à 16.6.1 ou 17.0 | [TrollStore](https://github.com/opa334/TrollStore) : installation permanente, sans renouvellement. |
+> | Jailbreaké (ex. iOS 12 avec checkra1n / unc0ver) | [AppSync Unified](https://github.com/akemin-dayo/AppSync) puis installez l'IPA (Filza, ou Sideloadly) : installation permanente. |
+> | iOS 15 ou plus, sans les modifications de ce fork | La version officielle de l'auteur sur l'[App Store](https://apps.apple.com/gb/app/ha-dash/id6759347912). |
+>
+> Ensuite, dans l'app : saisissez l'adresse de votre Home Assistant, connectez-vous, puis choisissez le
+> tableau de bord à afficher (roue dentée → réglages). Le **mode kiosque** masque la barre du haut
+> (trois appuis en haut de l'écran pour la réafficher).
+>
+> L'IPA ne contient aucune donnée personnelle : votre adresse et vos identifiants Home Assistant restent
+> uniquement sur votre appareil.
+>
+> ---
+>
+> ## 🇬🇧 About this fork
+>
+> **This is not my app.** HA Dashboard was created by **Ash Hopkins** (with contributions from Sinan Yasar,
+> Matthew Robertson and sharpyexe): **[ha-dashboard/ios-app](https://github.com/ha-dashboard/ios-app)**.
+> This fork only adds a few changes for my own wall-mounted iPad Air 1 (pill-style view tabs, full-width
+> framed sections, thermostat summary with heating periods and heating time, temperature/humidity graphs
+> with an outdoor overlay, simplified detail sheets, a few fixes), released under the same Apache 2.0 license.
+>
+> The IPA in **[Releases](https://github.com/chidori777/ios-app/releases)** is universal (armv7 + arm64,
+> iOS 9.3.3 and later) and unsigned: install it with Sideloadly (free Apple ID: re-sign every 7 days),
+> TrollStore (iOS 14.0–16.6.1 / 17.0), or AppSync Unified on a jailbroken device. On iOS 15+, the original
+> author's App Store version is also available (without this fork's changes).
+>
+> *The original README follows below.*
+
+---
+
 # HA Dashboard
 
 [![Download on the App Store](https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83)](https://apps.apple.com/gb/app/ha-dash/id6759347912)
