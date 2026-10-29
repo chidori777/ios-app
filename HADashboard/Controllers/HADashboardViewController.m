@@ -2259,9 +2259,7 @@ heightForHeaderInSection:(NSInteger)section {
         NSString *(^fmt)(NSDate *) = ^NSString *(NSDate *from) {
             return [HAHeatingAnalysis formattedDuration:[HAHeatingAnalysis heatingSecondsInRanges:ranges start:[from timeIntervalSince1970] end:end]];
         };
-        strongAlert.message = [NSString stringWithFormat:@"Aujourd'hui : %@
-Cette semaine : %@
-Ce mois-ci : %@",
+        strongAlert.message = [NSString stringWithFormat:@"Aujourd'hui : %@\nCette semaine : %@\nCe mois-ci : %@",
                                fmt(dayStart), fmt(weekStart), fmt(monthStart)];
     }];
 }
