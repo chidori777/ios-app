@@ -524,7 +524,37 @@ static const CGFloat kGraphHeight = 160.0;
     if ([action isEqualToString:@"heating"]) [parts addObject:@"Chauffe en cours"];
     else if ([action isEqualToString:@"idle"]) [parts addObject:@"Au repos"];
     else if ([self.entity.state isEqualToString:@"off"]) [parts addObject:@"Arrêté"];
+    NSString *planning = [self climatePlanningLine];
+    if (planning) [parts addObject:planning];
     self.climateSummaryLabel.text = [parts componentsJoinedByString:@"\n"];
+}
+
+/// Heating schedule (HA schedule helper) linked by naming convention:
+/// climate.thermostat_<room> <-> schedule.chauffage_<room>.
+/// "Programme : Éco jusqu'à 11:30".
+- (NSString *)climatePlanningLine {
+    NSString *entityId = self.entity.entityId;
+    NSString *prefix = @"climate.thermostat_";
+    if (![entityId hasPrefix:prefix]) return nil;
+    NSString *scheduleId = [@"schedule.chauffage_" stringByAppendingString:[entityId substringFromIndex:prefix.length]];
+    HAEntity *schedule = [[HAConnectionManager sharedManager] entityForId:scheduleId];
+    if (!schedule) return nil;
+    static NSDictionary *presetNames;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        presetNames = @{@"comfort": @"Confort", @"eco": @"Éco", @"home": @"Maison", @"away": @"Absent",
+                        @"sleep": @"Nuit", @"boost": @"Boost", @"none": @"Aucun", @"activity": @"Activité"};
+    });
+    id preset = schedule.attributes[@"preset"];
+    NSString *mode = [preset isKindOfClass:[NSString class]] ? (presetNames[preset] ?: preset) : nil;
+    if (!mode) mode = [schedule.state isEqualToString:@"on"] ? @"actif" : @"hors plage";
+    NSString *line = [NSString stringWithFormat:@"Programme : %@", mode];
+    id next = schedule.attributes[@"next_event"];
+    if ([next isKindOfClass:[NSString class]] && [(NSString *)next length] >= 16) {
+        // ISO 8601 with local offset ("2026-10-29T11:30:00+01:00"): HH:mm is chars 11-15.
+        line = [line stringByAppendingFormat:@" jusqu'à %@", [(NSString *)next substringWithRange:NSMakeRange(11, 5)]];
+    }
+    return line;
 }
 
 - (NSDictionary *)seriesWithPoints:(NSArray *)points color:(UIColor *)color label:(NSString *)label unit:(NSString *)unit {
