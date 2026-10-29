@@ -52,15 +52,32 @@ static const CGFloat kSceneChipRowHeight = 44.0; // chip height + padding
     return self;
 }
 
-- (void)cellTapped:(UITapGestureRecognizer *)gesture {
-    if (!self.entityTapBlock) return;
+/// Row under the touch, or nil when the touch lands on one of the row's own
+/// controls (switch, buttons): those handle themselves and must not also fire
+/// the row action (a toggle would otherwise run twice).
+- (HAEntityRowView *)rowForGesture:(UIGestureRecognizer *)gesture {
     CGPoint point = [gesture locationInView:self.stackView];
     for (HAEntityRowView *row in self.rowViews) {
-        if (CGRectContainsPoint(row.frame, point) && row.entity) {
-            self.entityTapBlock(row.entity);
-            return;
+        if (row.hidden || !row.entity || !CGRectContainsPoint(row.frame, point)) continue;
+        UIView *hit = [row hitTest:[gesture locationInView:row] withEvent:nil];
+        for (UIView *v = hit; v && v != row; v = v.superview) {
+            if ([v isKindOfClass:[UIControl class]]) return nil;
         }
+        return row;
     }
+    return nil;
+}
+
+- (void)cellTapped:(UITapGestureRecognizer *)gesture {
+    if (!self.entityTapBlock) return;
+    HAEntityRowView *row = [self rowForGesture:gesture];
+    if (!row) return;
+    // A row with its own Lovelace tap_action (toggle, more-info with `entity`
+    // override, navigate...) is executed by the dashboard's didSelect handler.
+    // Presenting the row entity's detail here as well raced it: the wrong sheet
+    // won and the configured action was silently dropped.
+    if ([row.actionConfig[@"tap_action"] isKindOfClass:[NSDictionary class]]) return;
+    self.entityTapBlock(row.entity);
 }
 
 - (void)setupSubviews {
