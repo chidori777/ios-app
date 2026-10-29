@@ -471,13 +471,15 @@ static UIImage *_blurredGradientCache = nil;
 }
 
 + (UIColor *)secondaryTextColor {
+    // Brighter in dark mode: states such as "Off" stay readable over the
+    // frosted blur of the night gradients.
     return [self colorWithLight:[UIColor grayColor]
-                           dark:[UIColor colorWithWhite:0.6 alpha:1.0]];
+                           dark:[UIColor colorWithWhite:0.78 alpha:1.0]];
 }
 
 + (UIColor *)tertiaryTextColor {
     return [self colorWithLight:[UIColor lightGrayColor]
-                           dark:[UIColor colorWithWhite:0.4 alpha:1.0]];
+                           dark:[UIColor colorWithWhite:0.58 alpha:1.0]];
 }
 
 #pragma mark - Semantic
@@ -576,7 +578,7 @@ static UIImage *_blurredGradientCache = nil;
 
 + (UIColor *)sectionHeaderColor {
     return [self colorWithLight:[UIColor colorWithWhite:0.3 alpha:1.0]
-                           dark:[UIColor colorWithWhite:0.75 alpha:1.0]];
+                           dark:[UIColor colorWithWhite:0.92 alpha:1.0]];
 }
 
 #pragma mark - Developer Mode

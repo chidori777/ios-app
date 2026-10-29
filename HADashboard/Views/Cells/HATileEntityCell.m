@@ -105,7 +105,7 @@
 
     // State label (below name, right of icon in normal mode; hidden in compact mode)
     self.tileStateLabel = [[UILabel alloc] init];
-    self.tileStateLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightRegular];
+    self.tileStateLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
     self.tileStateLabel.textColor = [HATheme secondaryTextColor];
     self.tileStateLabel.textAlignment = NSTextAlignmentLeft;
     self.tileStateLabel.translatesAutoresizingMaskIntoConstraints = NO;
