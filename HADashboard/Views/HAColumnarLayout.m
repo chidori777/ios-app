@@ -1,4 +1,35 @@
 #import "HAColumnarLayout.h"
+#import "HATheme.h"
+
+static NSString *const kHASectionFrameKind = @"HASectionFrame";
+static const CGFloat kHASectionFramePadding = 10.0;
+
+/// Rounded, softly tinted frame drawn behind full-width (column_span > 1)
+/// sections such as "Commandes générales", to set them apart from rooms.
+@interface HASectionFrameView : UICollectionReusableView
+@end
+
+@implementation HASectionFrameView
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.userInteractionEnabled = NO;
+        self.layer.cornerRadius = 18.0;
+        self.layer.borderWidth = 1.5;
+        [self applyColors];
+    }
+    return self;
+}
+- (void)applyColors {
+    BOOL dark = [HATheme effectiveDarkMode];
+    self.backgroundColor = dark ? [UIColor colorWithWhite:1.0 alpha:0.07] : [UIColor colorWithWhite:0.0 alpha:0.035];
+    self.layer.borderColor = [[HATheme accentColor] colorWithAlphaComponent:0.55].CGColor;
+}
+- (void)prepareForReuse {
+    [super prepareForReuse];
+    [self applyColors];
+}
+@end
 
 @interface HAColumnarLayout ()
 @property (nonatomic, strong) NSMutableArray<UICollectionViewLayoutAttributes *> *itemAttributes;
@@ -6,6 +37,7 @@
 @property (nonatomic, strong) NSMutableDictionary<NSIndexPath *, UICollectionViewLayoutAttributes *> *itemAttributesByIndexPath;
 @property (nonatomic, strong) NSMutableDictionary<NSIndexPath *, UICollectionViewLayoutAttributes *> *headerAttributesByIndexPath;
 @property (nonatomic, assign) CGSize cachedContentSize;
+@property (nonatomic, strong) NSMutableDictionary<NSIndexPath *, UICollectionViewLayoutAttributes *> *frameAttributesByIndexPath;
 @end
 
 @implementation HAColumnarLayout
@@ -29,6 +61,11 @@
 
     [self.itemAttributes removeAllObjects];
     [self.headerAttributes removeAllObjects];
+    if (!self.frameAttributesByIndexPath) {
+        self.frameAttributesByIndexPath = [NSMutableDictionary dictionary];
+        [self registerClass:[HASectionFrameView class] forDecorationViewOfKind:kHASectionFrameKind];
+    }
+    [self.frameAttributesByIndexPath removeAllObjects];
     [self.itemAttributesByIndexPath removeAllObjects];
     [self.headerAttributesByIndexPath removeAllObjects];
 
@@ -106,6 +143,14 @@
             NSInteger col = sectionStartCol[section]; // first page column of this section
             CGFloat columnX = self.contentInsets.left + col * (columnWidth + self.interColumnSpacing);
             CGFloat sectionWidth = sectionSpan[section] * columnWidth + (sectionSpan[section] - 1) * self.interColumnSpacing;
+            // Full-width sections are framed: content is inset inside the frame.
+            BOOL framed = sectionSpan[section] > 1;
+            CGFloat frameTop = columnY[col];
+            if (framed) {
+                columnX += kHASectionFramePadding;
+                sectionWidth -= 2 * kHASectionFramePadding;
+                columnY[col] += kHASectionFramePadding * 0.5;
+            }
 
             // Section header
             CGFloat headerHeight = 0;
@@ -191,6 +236,19 @@
             if (rowMaxHeight > 0) {
                 columnY[col] = rowStartY + rowMaxHeight + self.interItemSpacing;
             }
+
+            if (framed) {
+                columnY[col] += kHASectionFramePadding * 0.5;
+                NSIndexPath *frameIndexPath = [NSIndexPath indexPathForItem:0 inSection:section];
+                UICollectionViewLayoutAttributes *frameAttr =
+                    [UICollectionViewLayoutAttributes layoutAttributesForDecorationViewOfKind:kHASectionFrameKind
+                                                                                withIndexPath:frameIndexPath];
+                frameAttr.frame = CGRectMake(columnX - kHASectionFramePadding, frameTop,
+                                             sectionWidth + 2 * kHASectionFramePadding, columnY[col] - frameTop);
+                frameAttr.zIndex = -1;
+                self.frameAttributesByIndexPath[frameIndexPath] = frameAttr;
+                columnY[col] += self.interItemSpacing;
+            }
         }
 
         // Find the tallest column in this section row to determine the row height
@@ -219,6 +277,11 @@
 - (NSArray<UICollectionViewLayoutAttributes *> *)layoutAttributesForElementsInRect:(CGRect)rect {
     NSMutableArray *result = [NSMutableArray array];
 
+    for (UICollectionViewLayoutAttributes *attr in self.frameAttributesByIndexPath.allValues) {
+        if (CGRectIntersectsRect(attr.frame, rect)) {
+            [result addObject:attr];
+        }
+    }
     for (UICollectionViewLayoutAttributes *attr in self.headerAttributes) {
         if (CGRectIntersectsRect(attr.frame, rect)) {
             [result addObject:attr];
@@ -231,6 +294,12 @@
     }
 
     return result;
+}
+
+- (UICollectionViewLayoutAttributes *)layoutAttributesForDecorationViewOfKind:(NSString *)elementKind
+                                                                  atIndexPath:(NSIndexPath *)indexPath {
+    if (![elementKind isEqualToString:kHASectionFrameKind]) return nil;
+    return self.frameAttributesByIndexPath[indexPath];
 }
 
 - (UICollectionViewLayoutAttributes *)layoutAttributesForItemAtIndexPath:(NSIndexPath *)indexPath {
