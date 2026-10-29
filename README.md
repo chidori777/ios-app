@@ -10,6 +10,15 @@
 > Ce fork ajoute seulement quelques modifications pour mon usage (iPad Air 1 sous iOS 12, en mural),
 > publiées sous la même licence [Apache 2.0](LICENSE).
 >
+> ### Aperçu (iPad Air 1, iOS 12)
+>
+> <table><tr>
+> <td width="25%"><img src="docs/fork/accueil.webp" alt="Accueil"><br><sub>Commandes générales encadrées, pièces alignées</sub></td>
+> <td width="25%"><img src="docs/fork/thermostat.webp" alt="Thermostat"><br><sub>Thermostat : résumé, planning, chauffe surlignée</sub></td>
+> <td width="25%"><img src="docs/fork/temperature.webp" alt="Température"><br><sub>Température, humidité et extérieur</sub></td>
+> <td width="25%"><img src="docs/fork/lumiere.webp" alt="Lumière"><br><sub>Fiche lumière épurée</sub></td>
+> </tr></table>
+>
 > ### Ce que ce fork ajoute
 >
 > **Mise en page**
@@ -162,6 +171,7 @@ the supported commands and payloads.
 ## Screenshots
 
 See the [landing page](https://ha-dashboard.github.io/ios-app/) for screenshots.
+*(Ces captures montrent l'app d'origine ; celles de ce fork sont en haut de page.)*
 
 ## Requirements
 
