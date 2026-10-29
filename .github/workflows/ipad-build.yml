@@ -1,0 +1,137 @@
+name: iPad build (unsigned IPA for Sideloadly)
+
+# Fork-only workflow: builds the universal armv7+arm64 / iOS 9 app without any
+# Apple signing secret and publishes an unsigned IPA as a GitHub release.
+# Sideloadly (or AppSync on a jailbroken device) signs it at install time.
+
+on:
+  push:
+    branches: [ipad-ameliorations]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  XCODE13_SDK_STUBS_RELEASE: xcode13-sdk-stubs-v1
+  XCODE13_SDK_STUBS_SHA256: 7b89a8882d60246b0ba53ed4a61363a0cbcad648e5b36874940bf4ee400c2dfc
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode.app /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Using: $XCODE"
+          sudo xcode-select -s "$XCODE"
+          echo "XCODE_PATH=$XCODE" >> "$GITHUB_ENV"
+
+      - name: Install XcodeGen and generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate --spec project.yml
+
+      - name: Download Xcode 13 SDK stubs (from upstream release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          STUBS_DIR="$RUNNER_TEMP/xcode13-sdk-stubs"
+          mkdir -p "$STUBS_DIR"
+          gh release download "$XCODE13_SDK_STUBS_RELEASE" \
+            --repo ha-dashboard/ios-app \
+            --pattern iPhoneOS-armv7-stubs.tar.gz \
+            --dir "$STUBS_DIR"
+          echo "$XCODE13_SDK_STUBS_SHA256  $STUBS_DIR/iPhoneOS-armv7-stubs.tar.gz" | shasum -a 256 -c -
+          tar xzf "$STUBS_DIR/iPhoneOS-armv7-stubs.tar.gz" -C "$STUBS_DIR"
+          echo "XCODE13_SDK_PATH=$STUBS_DIR/iPhoneOS.sdk" >> "$GITHUB_ENV"
+
+      - name: Compile iOS 9 armv7 + arm64 slices
+        env:
+          HADASHBOARD_SLICES_ONLY: YES
+        run: scripts/build.sh device
+
+      - name: Build unsigned bundle template
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          xcodebuild \
+            -project HADashboard.xcodeproj \
+            -scheme HADashboard \
+            -sdk iphoneos \
+            -configuration Debug \
+            -derivedDataPath build/template \
+            ARCHS=arm64 VALID_ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
+            PRODUCT_BUNDLE_IDENTIFIER=com.hadashboard.app \
+            MARKETING_VERSION=1.3.1 \
+            CURRENT_PROJECT_VERSION=$BUILD_NUMBER \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | grep -E '(error:|BUILD)' | tail -20
+          test -d "build/template/Build/Products/Debug-iphoneos/HA Dashboard.app"
+
+      - name: Assemble universal IPA
+        run: |
+          set -euo pipefail
+          U=build/universal
+          APP="$U/HA Dashboard.app"
+          rm -rf "$APP"
+          cp -R "build/template/Build/Products/Debug-iphoneos/HA Dashboard.app" "$APP"
+          rm -rf "$APP/_CodeSignature" "$APP/embedded.mobileprovision"
+          lipo -create "$U/armv7-thin" "$U/arm64-thin" -output "$APP/HA Dashboard"
+          xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" \
+            HADashboard/LaunchScreen.storyboard \
+            --minimum-deployment-target 9.0 \
+            --target-device ipad --target-device iphone
+          PLIST="$APP/Info.plist"
+          plutil -replace MinimumOSVersion -string "9.0" "$PLIST"
+          plutil -remove UIRequiredDeviceCapabilities "$PLIST" 2>/dev/null || true
+          plutil -insert UIRequiredDeviceCapabilities -json '["armv7"]' "$PLIST"
+          plutil -remove UILaunchScreen "$PLIST" 2>/dev/null || true
+          plutil -replace UILaunchStoryboardName -string "LaunchScreen" "$PLIST" 2>/dev/null || \
+            plutil -insert UILaunchStoryboardName -string "LaunchScreen" "$PLIST"
+          plutil -remove 'CFBundleIcons~ipad.CFBundlePrimaryIcon.CFBundleIconFiles' "$PLIST" 2>/dev/null || true
+          plutil -insert 'CFBundleIcons~ipad.CFBundlePrimaryIcon.CFBundleIconFiles' \
+            -json '["AppIcon60x60","AppIcon76x76","AppIcon83.5x83.5"]' "$PLIST" 2>/dev/null || true
+          ICON=HADashboard/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+          if [ -f "$ICON" ]; then
+            sips -z 76 76 "$ICON" --out "$APP/AppIcon76x76~ipad.png" >/dev/null
+            sips -z 152 152 "$ICON" --out "$APP/AppIcon76x76@2x~ipad.png" >/dev/null
+            sips -z 167 167 "$ICON" --out "$APP/AppIcon83.5x83.5@2x~ipad.png" >/dev/null
+            sips -z 120 120 "$ICON" --out "$APP/AppIcon60x60@2x.png" >/dev/null
+            sips -z 180 180 "$ICON" --out "$APP/AppIcon60x60@3x.png" >/dev/null
+          fi
+          test "$(lipo -archs "$APP/HA Dashboard")" = "armv7 arm64"
+          mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../HADashboard-ipad.ipa Payload)
+          ls -la HADashboard-ipad.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HADashboard-ipad
+          path: HADashboard-ipad.ipa
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="ipad-build-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" HADashboard-ipad.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "iPad build ${GITHUB_RUN_NUMBER} ($(git log -1 --format=%h))" \
+            --notes "Unsigned universal IPA (armv7+arm64, iOS 9+). Install with Sideloadly. $(git log -1 --format=%s)" \
+            --prerelease
