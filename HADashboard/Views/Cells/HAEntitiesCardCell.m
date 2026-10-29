@@ -716,7 +716,22 @@ static inline NSString *HANormalizeState(id val) {
             }
 
             rowView.actionConfig = rowCfg;
+            NSDictionary *rowTapAction = [rowCfg[@"tap_action"] isKindOfClass:[NSDictionary class]] ? rowCfg[@"tap_action"] : nil;
             rowView.entityTapBlock = ^(HAEntity *tappedEntity) {
+                // The row's own tap gesture swallows the touch, so the
+                // dashboard's didSelect never sees it: run the configured
+                // tap_action here (toggle, more-info with an `entity`
+                // override...), and fall back to the entity sheet otherwise.
+                HAAction *action = rowTapAction ? [HAAction actionFromDictionary:rowTapAction] : nil;
+                if (action) {
+                    UIViewController *host = nil;
+                    UIResponder *responder = weakSelf;
+                    while ((responder = [responder nextResponder])) {
+                        if ([responder isKindOfClass:[UIViewController class]]) { host = (UIViewController *)responder; break; }
+                    }
+                    [[HAActionDispatcher sharedDispatcher] executeAction:action forEntity:tappedEntity fromViewController:host];
+                    return;
+                }
                 if (weakSelf.entityTapBlock) {
                     weakSelf.entityTapBlock(tappedEntity);
                 }

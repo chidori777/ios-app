@@ -624,7 +624,7 @@ static const CGFloat kGraphHeight = 160.0;
         [strongSelf.graphSpinner stopAnimating];
         UIColor *blue = [UIColor colorWithRed:0.29 green:0.48 blue:0.85 alpha:1.0];
         UIColor *yellow = [UIColor colorWithRed:0.95 green:0.71 blue:0.16 alpha:1.0];
-        UIColor *orange = [UIColor colorWithRed:0.97 green:0.58 blue:0.20 alpha:1.0];
+        UIColor *green = [UIColor colorWithRed:0.30 green:0.78 blue:0.40 alpha:1.0];
         UIColor *lightBlue = [UIColor colorWithRed:0.30 green:0.65 blue:0.95 alpha:1.0];
         UIColor *red = [UIColor colorWithRed:0.92 green:0.26 blue:0.24 alpha:1.0];
         BOOL humidityMode = [[strongSelf sensorGraphClass] isEqualToString:@"humidity"];
@@ -639,7 +639,7 @@ static const CGFloat kGraphHeight = 160.0;
             NSArray *hum = results[@"humidity"];
             if (own.count > 1) {
                 [series addObject:[strongSelf seriesWithPoints:own
-                                                         color:(humidityMode ? lightBlue : orange)
+                                                         color:(humidityMode ? lightBlue : green)
                                                          label:(humidityMode ? @"Humidité" : @"Température")
                                                           unit:(humidityMode ? @"%" : unitTemp)]];
             }
