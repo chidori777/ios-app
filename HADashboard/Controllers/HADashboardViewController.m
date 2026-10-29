@@ -1028,6 +1028,7 @@ static const CGFloat kRowUnitHeight = 56.0;
             filtered.entityIds = section.entityIds;
             filtered.nameOverrides = section.nameOverrides;
             filtered.customProperties = section.customProperties;
+            filtered.columnSpan = section.columnSpan;
             filtered.items = filteredItems;
             [filteredSections addObject:filtered];
         }
