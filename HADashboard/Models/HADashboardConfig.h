@@ -42,6 +42,8 @@
 @property (nonatomic, copy) NSArray<NSString *> *entityIds; // All entity IDs for composite cards
 @property (nonatomic, copy) NSDictionary<NSString *, NSString *> *nameOverrides; // entity_id -> display name
 @property (nonatomic, copy) NSDictionary *customProperties; // Extra rendering hints (e.g. chipStyle)
+/// HA sections view `column_span`: number of page columns this section occupies (0/1 = one column)
+@property (nonatomic, assign) NSInteger columnSpan;
 
 @end
 

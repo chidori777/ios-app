@@ -50,10 +50,12 @@ NSString *const HAUnsupportedCardTypeKey = @"unsupportedCardType";
                         [allCards addObjectsFromArray:sectionCards];
 
                         NSString *sectionIcon = HASafeDictStringOrNil(section, @"icon");
+                        NSNumber *sectionSpan = HASafeDictNumberOrNil(section, @"column_span");
                         [parsedSections addObject:@{
                             @"title": sectionTitle ?: @"",
                             @"icon": sectionIcon ?: @"",
-                            @"cards": sectionCards
+                            @"cards": sectionCards,
+                            @"column_span": sectionSpan ?: @1
                         }];
                     }
                     view.rawSections = [parsedSections copy];
@@ -246,6 +248,8 @@ static NSMutableSet<NSString *> *_HAUnsupportedCardLoggedTypes = nil;
             HADashboardConfigSection *columnSection = [[HADashboardConfigSection alloc] init];
             columnSection.title = haSectionTitle;
             columnSection.icon = haSectionIcon;
+            id rawSpan = rawSection[@"column_span"];
+            columnSection.columnSpan = [rawSpan isKindOfClass:[NSNumber class]] ? MAX(1, [rawSpan integerValue]) : 1;
 
             // Collect all items from sub-sections, preserving entities card structure
             NSMutableArray<HADashboardConfigItem *> *mergedItems = [NSMutableArray array];

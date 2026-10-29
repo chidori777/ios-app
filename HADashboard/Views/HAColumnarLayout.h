@@ -25,6 +25,11 @@ heightForHeaderInSection:(NSInteger)section;
                  layout:(UICollectionViewLayout *)layout
   isHeadingItemAtIndexPath:(NSIndexPath *)indexPath;
 
+/// Return the number of page columns the section occupies (HA `column_span`, default 1).
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section;
+
 @end
 
 /// A multi-column collection view layout where each section is a vertical column.

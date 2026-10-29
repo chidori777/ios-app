@@ -44,7 +44,16 @@
     // Column capping: maxColumns limits the number of visible columns per row.
     // Sections beyond maxColumns wrap into additional rows below.
     NSInteger maxCols = self.maxColumns > 0 ? self.maxColumns : 4; // HA default is 4
-    NSInteger effectiveCols = MIN(sectionCount, maxCols);
+    // HA `column_span`: a section may occupy several page columns.
+    BOOL canQuerySpan = [self.delegate respondsToSelector:@selector(collectionView:layout:columnSpanForSection:)];
+    NSInteger *sectionSpan = calloc(sectionCount, sizeof(NSInteger));
+    NSInteger totalSpan = 0;
+    for (NSInteger s = 0; s < sectionCount; s++) {
+        NSInteger span = canQuerySpan ? [self.delegate collectionView:cv layout:self columnSpanForSection:s] : 1;
+        sectionSpan[s] = MAX(1, MIN(span, maxCols));
+        totalSpan += sectionSpan[s];
+    }
+    NSInteger effectiveCols = MIN(totalSpan, maxCols);
 
     CGFloat totalWidth = cv.bounds.size.width - self.contentInsets.left - self.contentInsets.right;
 
@@ -60,16 +69,32 @@
 
     CGFloat columnWidth = floor((totalWidth - self.interColumnSpacing * (effectiveCols - 1)) / effectiveCols);
 
-    // Number of section rows needed
-    NSInteger sectionRowCount = (sectionCount + effectiveCols - 1) / effectiveCols;
+    // Pack sections into rows by span: a row holds sections until their spans
+    // exceed the visible column count. Each section records its starting column.
+    NSInteger *sectionStartCol = calloc(sectionCount, sizeof(NSInteger));
+    NSInteger *rowFirst = calloc(sectionCount, sizeof(NSInteger));
+    NSInteger *rowLast = calloc(sectionCount, sizeof(NSInteger));
+    NSInteger sectionRowCount = 0;
+    NSInteger usedCols = 0;
+    for (NSInteger s = 0; s < sectionCount; s++) {
+        sectionSpan[s] = MIN(sectionSpan[s], effectiveCols);
+        if (sectionRowCount == 0 || usedCols + sectionSpan[s] > effectiveCols) {
+            rowFirst[sectionRowCount] = s;
+            sectionRowCount++;
+            usedCols = 0;
+        }
+        sectionStartCol[s] = usedCols;
+        usedCols += sectionSpan[s];
+        rowLast[sectionRowCount - 1] = s + 1;
+    }
 
     // Track Y offset across section rows
     CGFloat sectionRowStartY = self.contentInsets.top;
 
     for (NSInteger sectionRow = 0; sectionRow < sectionRowCount; sectionRow++) {
-        NSInteger firstSection = sectionRow * effectiveCols;
-        NSInteger lastSection = MIN(firstSection + effectiveCols, sectionCount);
-        NSInteger colsInRow = lastSection - firstSection;
+        NSInteger firstSection = rowFirst[sectionRow];
+        NSInteger lastSection = rowLast[sectionRow];
+        NSInteger colsInRow = effectiveCols;
 
         // Track the Y offset for each column within this section row
         CGFloat *columnY = calloc(colsInRow, sizeof(CGFloat));
@@ -78,8 +103,9 @@
         }
 
         for (NSInteger section = firstSection; section < lastSection; section++) {
-            NSInteger col = section - firstSection; // column index within this row
+            NSInteger col = sectionStartCol[section]; // first page column of this section
             CGFloat columnX = self.contentInsets.left + col * (columnWidth + self.interColumnSpacing);
+            CGFloat sectionWidth = sectionSpan[section] * columnWidth + (sectionSpan[section] - 1) * self.interColumnSpacing;
 
             // Section header
             CGFloat headerHeight = 0;
@@ -92,7 +118,7 @@
                 UICollectionViewLayoutAttributes *headerAttr =
                     [UICollectionViewLayoutAttributes layoutAttributesForSupplementaryViewOfKind:UICollectionElementKindSectionHeader
                                                                                   withIndexPath:headerIndexPath];
-                headerAttr.frame = CGRectMake(columnX, columnY[col], columnWidth, headerHeight);
+                headerAttr.frame = CGRectMake(columnX, columnY[col], sectionWidth, headerHeight);
                 [self.headerAttributes addObject:headerAttr];
                 self.headerAttributesByIndexPath[headerIndexPath] = headerAttr;
                 columnY[col] += headerHeight;
@@ -135,14 +161,14 @@
                 // Calculate item width from sub-grid fraction
                 CGFloat itemWidth;
                 if (gridCols >= kSubGridColumns) {
-                    itemWidth = columnWidth;
+                    itemWidth = sectionWidth;
                 } else {
                     // Proportional width minus spacing between sub-grid items
-                    CGFloat usableWidth = columnWidth;
+                    CGFloat usableWidth = sectionWidth;
                     itemWidth = floor((usableWidth * gridCols) / kSubGridColumns - subGridSpacing * 0.5);
                 }
 
-                CGFloat itemX = columnX + (columnWidth * rowUsed) / kSubGridColumns;
+                CGFloat itemX = columnX + (sectionWidth * rowUsed) / kSubGridColumns;
                 if (rowUsed > 0) itemX += subGridSpacing * 0.5;
 
                 CGFloat itemHeight = 100.0;
@@ -178,6 +204,10 @@
         // Add inter-column spacing as inter-row spacing between section rows
         sectionRowStartY = sectionRowMaxY + (sectionRow < sectionRowCount - 1 ? self.interColumnSpacing : 0);
     }
+    free(sectionSpan);
+    free(sectionStartCol);
+    free(rowFirst);
+    free(rowLast);
 
     self.cachedContentSize = CGSizeMake(cv.bounds.size.width, sectionRowStartY + self.contentInsets.bottom);
 }

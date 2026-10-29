@@ -2011,6 +2011,13 @@ heightForHeaderInSection:(NSInteger)section {
     return [item.cardType isEqualToString:@"heading"];
 }
 
+- (NSInteger)collectionView:(UICollectionView *)collectionView
+                     layout:(UICollectionViewLayout *)layout
+       columnSpanForSection:(NSInteger)section {
+    HADashboardConfigSection *configSection = [self sectionAtIndex:section];
+    return MAX(1, configSection.columnSpan);
+}
+
 #pragma mark - HAMasonryLayoutDelegate
 
 - (NSString *)collectionView:(UICollectionView *)collectionView

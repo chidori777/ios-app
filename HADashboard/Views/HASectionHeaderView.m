@@ -80,6 +80,10 @@
         self.titleLeadingWithIcon.active = NO;
         self.titleLeadingNoIcon.active = YES;
     }
+
+    // A section spanning several page columns (HA `column_span`) gets a centred
+    // title, so full-width headers read as page headings rather than column labels.
+    self.titleLabel.textAlignment = (section.columnSpan > 1 && !glyph) ? NSTextAlignmentCenter : NSTextAlignmentLeft;
 }
 
 - (void)prepareForReuse {
