@@ -26,6 +26,8 @@ env:
 
 jobs:
   build-and-test:
+    # Upstream-only: forks have no Xcode 13 stub release or signing secrets.
+    if: github.repository == 'ha-dashboard/ios-app'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -110,6 +112,8 @@ jobs:
 
   # ── Verify immutable stubs and compile both iOS 9 release slices ─────
   verify-ios9-slices:
+    # Upstream-only: forks have no Xcode 13 stub release or signing secrets.
+    if: github.repository == 'ha-dashboard/ios-app'
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
