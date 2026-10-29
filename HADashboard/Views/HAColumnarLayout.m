@@ -111,6 +111,10 @@ static const CGFloat kHASectionFramePadding = 10.0;
     NSInteger *sectionStartCol = calloc(sectionCount, sizeof(NSInteger));
     NSInteger *rowFirst = calloc(sectionCount, sizeof(NSInteger));
     NSInteger *rowLast = calloc(sectionCount, sizeof(NSInteger));
+    // Per section: index in itemAttributes where its last item row begins,
+    // and how many item rows it has (used to bottom-align side-by-side rooms).
+    NSInteger *lastRowAttrStart = calloc(sectionCount, sizeof(NSInteger));
+    NSInteger *itemRowCount = calloc(sectionCount, sizeof(NSInteger));
     NSInteger sectionRowCount = 0;
     NSInteger usedCols = 0;
     for (NSInteger s = 0; s < sectionCount; s++) {
@@ -179,6 +183,8 @@ static const CGFloat kHASectionFramePadding = 10.0;
 
             BOOL canQueryHeading = [self.delegate respondsToSelector:@selector(collectionView:layout:isHeadingItemAtIndexPath:)];
             BOOL lastRowWasHeading = NO;
+            lastRowAttrStart[section] = (NSInteger)self.itemAttributes.count;
+            itemRowCount[section] = itemCount > 0 ? 1 : 0;
 
             for (NSInteger item = 0; item < itemCount; item++) {
                 NSIndexPath *indexPath = [NSIndexPath indexPathForItem:item inSection:section];
@@ -201,6 +207,8 @@ static const CGFloat kHASectionFramePadding = 10.0;
                     rowStartY = columnY[col];
                     rowUsed = 0;
                     rowMaxHeight = 0;
+                    lastRowAttrStart[section] = (NSInteger)self.itemAttributes.count;
+                    itemRowCount[section]++;
                 }
 
                 // Calculate item width from sub-grid fraction
@@ -256,6 +264,24 @@ static const CGFloat kHASectionFramePadding = 10.0;
         for (NSInteger c = 0; c < colsInRow; c++) {
             if (columnY[c] > sectionRowMaxY) sectionRowMaxY = columnY[c];
         }
+
+        // Side-by-side rooms: push the last item row of a shorter section down
+        // so its bottom lines up with the tallest one (e.g. "Chauffage" tiles
+        // stay aligned when a room has no light). Full-width sections and
+        // single-row sections are left alone.
+        if (lastSection - firstSection > 1) {
+            for (NSInteger section = firstSection; section < lastSection; section++) {
+                if (sectionSpan[section] > 1 || itemRowCount[section] < 2) continue;
+                CGFloat delta = sectionRowMaxY - columnY[sectionStartCol[section]];
+                if (delta < 1.0) continue;
+                NSInteger start = lastRowAttrStart[section];
+                for (NSInteger i = start; i < (NSInteger)self.itemAttributes.count; i++) {
+                    UICollectionViewLayoutAttributes *attr = self.itemAttributes[i];
+                    if (attr.indexPath.section != section) continue;
+                    attr.frame = CGRectOffset(attr.frame, 0, delta);
+                }
+            }
+        }
         free(columnY);
 
         // Next section row starts after the tallest column in this row
@@ -266,6 +292,8 @@ static const CGFloat kHASectionFramePadding = 10.0;
     free(sectionStartCol);
     free(rowFirst);
     free(rowLast);
+    free(lastRowAttrStart);
+    free(itemRowCount);
 
     self.cachedContentSize = CGSizeMake(cv.bounds.size.width, sectionRowStartY + self.contentInsets.bottom);
 }
