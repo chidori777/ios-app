@@ -246,35 +246,20 @@
     self.flashButton.clipsToBounds = YES;
     self.flashButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self.flashButton addTarget:self action:@selector(flashTapped) forControlEvents:UIControlEventTouchUpInside];
-    [container addSubview:self.flashButton];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [self.flashButton.topAnchor constraintEqualToAnchor:prevAnchor.bottomAnchor constant:12],
-        [self.flashButton.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [self.flashButton.widthAnchor constraintEqualToConstant:100],
-        [self.flashButton.heightAnchor constraintEqualToConstant:36],
-    ]];
+    // Flash and transition controls are kept as objects (the service calls read
+    // the transition selection, which stays "Off") but are no longer shown:
+    // the simplified light sheet only offers on/off, brightness, colour and
+    // effects.
     // Transition control
     self.transitionLabel = [[UILabel alloc] init];
     self.transitionLabel.text = HALocalizedString(@"cell.entity_detail.light.transition_label", @"Label above the transition-duration segmented control in the light detail sheet. Short -- sits above a 5-item segment control.");
     self.transitionLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     self.transitionLabel.textColor = [HATheme secondaryTextColor];
     self.transitionLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.transitionLabel];
 
     self.transitionSegment = [[UISegmentedControl alloc] initWithItems:@[@"Off", @"1s", @"2s", @"5s", @"10s"]];
     self.transitionSegment.selectedSegmentIndex = 0; // Off
     self.transitionSegment.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:self.transitionSegment];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [self.transitionLabel.topAnchor constraintEqualToAnchor:self.flashButton.bottomAnchor constant:12],
-        [self.transitionLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [self.transitionSegment.topAnchor constraintEqualToAnchor:self.transitionLabel.bottomAnchor constant:6],
-        [self.transitionSegment.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [self.transitionSegment.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
-    ]];
-    prevAnchor = self.transitionSegment;
 
     // Scene chips (scenes in the same area as this light)
     if (self.areaScenes.count > 0) {
@@ -315,8 +300,6 @@
     if (self.hasHSColor) h += 232; // label + wheel + spacing
     if (self.hasColorTemp) h += 58; // label + gradient slider + spacing
     if (self.hasEffects) h += 48; // button
-    h += 48; // flash button
-    h += 58; // transition label + segment
     if (self.areaScenes.count > 0) h += 64; // label + chips row
     return h;
 }

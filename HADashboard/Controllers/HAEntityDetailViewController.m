@@ -215,6 +215,8 @@ static const CGFloat kGraphHeight = 160.0;
     self.historyContainer = [[UIView alloc] init];
     self.historyContainer.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentStack addArrangedSubview:self.historyContainer];
+    // Light sheets stay focused on the controls: no on/off history bar.
+    self.historyContainer.hidden = [[self.entity domain] isEqualToString:@"light"] && self.graphEntities.count <= 1;
 
     // Segmented control: 1h, 6h, 24h (default), 7d
     self.historySegment = [[UISegmentedControl alloc] initWithItems:@[@"1h", @"6h", @"24h", @"7d", @"Custom"]];
@@ -315,6 +317,11 @@ static const CGFloat kGraphHeight = 160.0;
         [self.attributesStack removeArrangedSubview:sub];
         [sub removeFromSuperview];
     }
+
+    // Simplified sheets: the raw attribute list (hvac_modes, min_temp, ...) is
+    // developer-level detail and is no longer shown.
+    self.attributesStack.hidden = YES;
+    return;
 
     NSDictionary *attributes = self.entity.attributes;
     if (!attributes || attributes.count == 0) return;
@@ -441,6 +448,36 @@ static const CGFloat kGraphHeight = 160.0;
     self.graphView.dataSeries = nil;
     self.graphView.timelineData = nil;
     [self.graphSpinner startAnimating];
+
+    if (self.historyContainer.hidden) {
+        [self.graphSpinner stopAnimating];
+        return;
+    }
+
+    // Thermostat: plot the measured temperature (current_temperature attribute)
+    // instead of the heat/off state timeline, which carries no curve.
+    if (self.graphEntities.count <= 1 &&
+        [[self.entity domain] isEqualToString:@"climate"] &&
+        self.entity.attributes[@"current_temperature"] != nil) {
+        NSDate *endDate = [NSDate date];
+        NSDate *startDate = [NSDate dateWithTimeIntervalSinceNow:-[self selectedHoursBack] * 3600];
+        if (self.historySegment.selectedSegmentIndex == 4 && self.customStartDate && self.customEndDate) {
+            startDate = self.customStartDate;
+            endDate = self.customEndDate;
+        }
+        __weak typeof(self) weakSelf = self;
+        [[HAHistoryManager sharedManager] fetchAttributeHistoryForEntityId:self.entity.entityId
+                                                                 attribute:@"current_temperature"
+                                                                 startDate:startDate
+                                                                   endDate:endDate
+                                                                completion:^(NSArray *points, NSError *error) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            [strongSelf.graphSpinner stopAnimating];
+            if (points.count > 0) strongSelf.graphView.dataPoints = points;
+        }];
+        return;
+    }
 
     // Multi-entity: parallel fetch all entities
     if (self.graphEntities.count > 1) {

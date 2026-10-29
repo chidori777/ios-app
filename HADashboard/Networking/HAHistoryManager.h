@@ -34,6 +34,14 @@
                          endDate:(NSDate *)endDate
                       completion:(void (^)(NSArray *segments, NSError *error))completion;
 
+/// Fetch numeric history of one attribute (e.g. a thermostat's
+/// `current_temperature`). Same point format as fetchHistoryForEntityId:.
+- (void)fetchAttributeHistoryForEntityId:(NSString *)entityId
+                               attribute:(NSString *)attribute
+                               startDate:(NSDate *)startDate
+                                 endDate:(NSDate *)endDate
+                              completion:(void (^)(NSArray *points, NSError *error))completion;
+
 /// Clear all cached history data.
 - (void)clearCache;
 

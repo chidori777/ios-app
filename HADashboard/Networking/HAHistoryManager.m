@@ -158,6 +158,103 @@
     [self.cache removeAllObjects];
 }
 
+#pragma mark - Attribute history
+
+- (void)fetchAttributeHistoryForEntityId:(NSString *)entityId
+                               attribute:(NSString *)attribute
+                               startDate:(NSDate *)startDate
+                                 endDate:(NSDate *)endDate
+                              completion:(void (^)(NSArray *, NSError *))completion {
+    if (!entityId || !attribute || !completion) return;
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        ha_dispatchMainCompletion(completion, @[], nil);
+        return;
+    }
+    NSString *serverURL = [[HAAuthManager sharedManager] serverURL];
+    NSString *token = [[HAAuthManager sharedManager] accessToken];
+    if (!serverURL || !token) {
+        ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Not configured"]);
+        return;
+    }
+    long startEpoch = (long)[startDate timeIntervalSince1970];
+    long endEpoch = (long)[endDate timeIntervalSince1970];
+    NSString *cacheKey = [NSString stringWithFormat:@"%@#%@_%ld_%ld", entityId, attribute, startEpoch, endEpoch];
+    NSArray *cached = [self.cache objectForKey:cacheKey];
+    if (cached) {
+        ha_dispatchMainCompletion(completion, cached, nil);
+        return;
+    }
+
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss";
+    fmt.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
+    fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+    // Attributes are required here, and attribute-only changes (a new
+    // current_temperature) are not "significant" state changes.
+    NSString *urlStr = [NSString stringWithFormat:@"%@/api/history/period/%@?end_time=%@&filter_entity_id=%@&significant_changes_only=0",
+                        serverURL, [fmt stringFromDate:startDate], [fmt stringFromDate:endDate], entityId];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) {
+        ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Bad URL"]);
+        return;
+    }
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    [request ha_setAuthHeaders:token];
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || !data) {
+            ha_dispatchMainCompletion(completion, nil, error);
+            return;
+        }
+        NSArray *points = [HAHistoryManager parseAttributeHistoryData:data attribute:attribute maxPoints:150];
+        if (points.count > 0) [self.cache setObject:points forKey:cacheKey];
+        ha_dispatchMainCompletion(completion, points, nil);
+    }];
+    [task resume];
+}
+
++ (NSArray *)parseAttributeHistoryData:(NSData *)data attribute:(NSString *)attribute maxPoints:(NSUInteger)maxPoints {
+    if (!data.length) return @[];
+    NSArray *result = nil;
+    @try {
+        result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    } @catch (NSException *e) {
+        return @[];
+    }
+    if (![result isKindOfClass:[NSArray class]] || result.count == 0) return @[];
+    NSArray *states = result.firstObject;
+    if (![states isKindOfClass:[NSArray class]]) return @[];
+
+    NSMutableArray *points = [NSMutableArray arrayWithCapacity:states.count];
+    for (NSDictionary *entry in states) {
+        if (![entry isKindOfClass:[NSDictionary class]]) continue;
+        NSDictionary *attrs = entry[@"attributes"];
+        if (![attrs isKindOfClass:[NSDictionary class]]) continue;
+        id raw = attrs[attribute];
+        if (![raw isKindOfClass:[NSNumber class]] && ![raw isKindOfClass:[NSString class]]) continue;
+        if ([raw isKindOfClass:[NSString class]] && [(NSString *)raw length] == 0) continue;
+        double value = [raw doubleValue];
+        // last_updated moves on attribute-only changes; last_changed does not.
+        id rawTime = entry[@"last_updated"];
+        if (![rawTime isKindOfClass:[NSString class]]) rawTime = entry[@"last_changed"];
+        if (![rawTime isKindOfClass:[NSString class]]) continue;
+        NSDate *date = [HADateUtils dateFromISO8601String:rawTime];
+        if (!date) continue;
+        [points addObject:@{@"value": @(value), @"timestamp": @([date timeIntervalSince1970])}];
+    }
+    if (maxPoints > 0 && points.count > maxPoints) {
+        NSMutableArray *sampled = [NSMutableArray arrayWithCapacity:maxPoints + 1];
+        double step = (double)points.count / (double)maxPoints;
+        for (NSUInteger i = 0; i < maxPoints; i++) {
+            NSUInteger idx = (NSUInteger)(i * step);
+            if (idx < points.count) [sampled addObject:points[idx]];
+        }
+        [sampled addObject:points.lastObject];
+        return [sampled copy];
+    }
+    return [points copy];
+}
+
 #pragma mark - Request Building
 
 - (NSURLRequest *)requestForEntityId:(NSString *)entityId startDate:(NSDate *)startDate endDate:(NSDate *)endDate minimal:(BOOL)minimal {
