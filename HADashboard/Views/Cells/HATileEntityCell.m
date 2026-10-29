@@ -28,6 +28,9 @@
 @property (nonatomic, strong) UIStackView *featuresStack;
 @property (nonatomic, strong) NSArray<HATileFeatureView *> *featureViews;
 @property (nonatomic, strong) NSLayoutConstraint *featuresTopConstraint;
+/// Features below the tile area (default) vs. on the title row (features_position: inline)
+@property (nonatomic, strong) NSArray<NSLayoutConstraint *> *featuresStackedConstraints;
+@property (nonatomic, strong) NSArray<NSLayoutConstraint *> *featuresInlineConstraints;
 @end
 
 @implementation HATileEntityCell
@@ -40,9 +43,20 @@
     return 72.0;
 }
 
++ (BOOL)featuresInlineForConfigItem:(HADashboardConfigItem *)configItem {
+    NSDictionary *props = configItem.customProperties;
+    return [props[@"features_position"] isKindOfClass:[NSString class]] &&
+           [props[@"features_position"] isEqualToString:@"inline"] &&
+           ![props[@"compact"] boolValue] && ![props[@"vertical"] boolValue];
+}
+
 + (CGFloat)preferredHeightForConfigItem:(HADashboardConfigItem *)configItem {
     NSArray *features = configItem.customProperties[@"features"];
     if (![features isKindOfClass:[NSArray class]] || features.count == 0) {
+        return [self preferredHeight];
+    }
+    // Inline features share the title row: the tile keeps its normal height.
+    if ([self featuresInlineForConfigItem:configItem]) {
         return [self preferredHeight];
     }
     // Don't add features height in compact mode
@@ -144,11 +158,20 @@
     [self.contentView addSubview:self.featuresStack];
 
     self.featuresTopConstraint = [self.featuresStack.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:72];
-    [NSLayoutConstraint activateConstraints:@[
+    self.featuresStackedConstraints = @[
         self.featuresTopConstraint,
         [self.featuresStack.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
         [self.featuresStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-    ]];
+    ];
+    // Inline: features on the right half of the title row, name truncates before them.
+    self.featuresInlineConstraints = @[
+        [self.featuresStack.centerYAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:tileAreaCenterY],
+        [self.featuresStack.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-4],
+        [self.featuresStack.widthAnchor constraintEqualToAnchor:self.contentView.widthAnchor multiplier:0.5],
+        [self.tileNameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.featuresStack.leadingAnchor constant:-4],
+        [self.tileStateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.featuresStack.leadingAnchor constant:-4],
+    ];
+    [NSLayoutConstraint activateConstraints:self.featuresStackedConstraints];
 
     // Icon tap gesture: separate from cell selection to support icon_tap_action.
     // When iconTapBlock is set, tapping the icon calls the block instead of
@@ -481,6 +504,9 @@
         if (views.count > 0) {
             self.featureViews = [views copy];
             self.featuresStack.hidden = NO;
+            BOOL inlineFeatures = [[self class] featuresInlineForConfigItem:configItem];
+            [NSLayoutConstraint deactivateConstraints:inlineFeatures ? self.featuresStackedConstraints : self.featuresInlineConstraints];
+            [NSLayoutConstraint activateConstraints:inlineFeatures ? self.featuresInlineConstraints : self.featuresStackedConstraints];
         } else {
             self.featuresStack.hidden = YES;
         }
