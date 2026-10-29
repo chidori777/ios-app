@@ -1,4 +1,5 @@
 #import "HAEntityDetailViewController.h"
+#import "HAStateLocalizer.h"
 #import "HAStrings.h"
 #import "HAEntity.h"
 #import "HATheme.h"
@@ -226,7 +227,10 @@ static const CGFloat kGraphHeight = 160.0;
     [self setupCustomGraphControls];
 
     // Segmented control: 1h, 6h, 24h (default), 7d
-    self.historySegment = [[UISegmentedControl alloc] initWithItems:@[@"1h", @"6h", @"24h", @"7d", @"Custom"]];
+    BOOL frenchUI = [[HAStateLocalizer lastResolvedLanguageCode] hasPrefix:@"fr"];
+    self.historySegment = [[UISegmentedControl alloc] initWithItems:frenchUI
+        ? @[@"1 h", @"6 h", @"24 h", @"7 j", @"Choisir"]
+        : @[@"1h", @"6h", @"24h", @"7d", @"Custom"]];
     // Default segment: pick the smallest segment that covers the card's hours_to_show
     if (self.hoursToShow > 0) {
         if (self.hoursToShow <= 1) self.historySegment.selectedSegmentIndex = 0;       // 1h

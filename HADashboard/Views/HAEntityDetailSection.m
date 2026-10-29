@@ -11,6 +11,13 @@
 #import "HAStrings.h"
 #import "HAStateLocalizer.h"
 
+/// Fork: a few app-owned labels are English only; show them in French when
+/// the resolved Home Assistant language is French.
+static BOOL HAUIIsFrench(void) {
+    NSString *lang = [HAStateLocalizer lastResolvedLanguageCode];
+    return [lang hasPrefix:@"fr"];
+}
+
 #pragma mark - Light Detail Section
 
 @interface HALightDetailSection : NSObject <HAEntityDetailSection, HAColorWheelViewDelegate>
@@ -264,7 +271,7 @@
     // Scene chips (scenes in the same area as this light)
     if (self.areaScenes.count > 0) {
         UILabel *scenesHeader = [[UILabel alloc] init];
-        scenesHeader.text = HALocalizedString(@"cell.entity_detail.light.scenes_header", @"Header above the row of same-area scene chips in the light detail sheet. Short -- sits above a horizontal scroll row of pill buttons.");
+        scenesHeader.text = HAUIIsFrench() ? @"Sc\u00E8nes" : HALocalizedString(@"cell.entity_detail.light.scenes_header", @"Header above the row of same-area scene chips in the light detail sheet. Short -- sits above a horizontal scroll row of pill buttons.");
         scenesHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
         scenesHeader.textColor = [HATheme secondaryTextColor];
         scenesHeader.translatesAutoresizingMaskIntoConstraints = NO;
@@ -308,9 +315,24 @@
     self.entity = entity;
     BOOL isOn = entity.isOn;
 
-    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
-    [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
-    self.toggleButton.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
+    NSString *toggleTitle = isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.");
+    if (HAUIIsFrench()) toggleTitle = isOn ? @"\u00C9teindre" : @"Allumer";
+    [self.toggleButton setTitle:toggleTitle forState:UIControlStateNormal];
+    UIColor *toggleBg = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
+    UIColor *toggleFg = [HATheme primaryTextColor];
+    if (isOn) {
+        // Pick black or white text from the background brightness: a pale
+        // "on" tint (light colour) made white text unreadable.
+        CGFloat r = 0, g = 0, b = 0, a = 1;
+        if ([toggleBg getRed:&r green:&g blue:&b alpha:&a]) {
+            CGFloat lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            toggleFg = (lum > 0.6 || a < 0.5) ? [UIColor colorWithWhite:0.1 alpha:1.0] : [UIColor whiteColor];
+        } else {
+            toggleFg = [UIColor whiteColor];
+        }
+    }
+    [self.toggleButton setTitleColor:toggleFg forState:UIControlStateNormal];
+    self.toggleButton.backgroundColor = toggleBg;
 
     NSInteger pct = [entity brightnessPercent];
     self.brightnessSlider.value = pct;
@@ -598,7 +620,14 @@
     NSMutableArray *displayModes = [NSMutableArray array];
     if (rawModes.count > 0) {
         for (NSString *mode in rawModes) {
-            [displayModes addObject:[mode capitalizedString]];
+            // HA's own translation of the climate state ("heat" -> "Chauffage").
+            NSString *label = [[HAStateLocalizer sharedLocalizer] localizedStateForDomain:@"climate"
+                                                                               deviceClass:nil
+                                                                                  platform:nil
+                                                                            translationKey:nil
+                                                                                     state:mode];
+            if (label.length == 0 || [label isEqualToString:mode]) label = [mode capitalizedString];
+            [displayModes addObject:label];
         }
     } else {
         [displayModes addObjectsFromArray:@[@"Off", @"Heat", @"Cool", @"Auto"]];
@@ -1608,9 +1637,24 @@
     self.entity = entity;
     BOOL isOn = entity.isOn;
 
-    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
-    [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
-    self.toggleButton.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
+    NSString *toggleTitle = isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.");
+    if (HAUIIsFrench()) toggleTitle = isOn ? @"\u00C9teindre" : @"Allumer";
+    [self.toggleButton setTitle:toggleTitle forState:UIControlStateNormal];
+    UIColor *toggleBg = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
+    UIColor *toggleFg = [HATheme primaryTextColor];
+    if (isOn) {
+        // Pick black or white text from the background brightness: a pale
+        // "on" tint (light colour) made white text unreadable.
+        CGFloat r = 0, g = 0, b = 0, a = 1;
+        if ([toggleBg getRed:&r green:&g blue:&b alpha:&a]) {
+            CGFloat lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            toggleFg = (lum > 0.6 || a < 0.5) ? [UIColor colorWithWhite:0.1 alpha:1.0] : [UIColor whiteColor];
+        } else {
+            toggleFg = [UIColor whiteColor];
+        }
+    }
+    [self.toggleButton setTitleColor:toggleFg forState:UIControlStateNormal];
+    self.toggleButton.backgroundColor = toggleBg;
 
     NSInteger pct = [entity fanSpeedPercent];
     self.speedSlider.value = pct;
@@ -3025,9 +3069,24 @@
     self.entity = entity;
     BOOL isOn = entity.isOn;
 
-    [self.toggleButton setTitle:isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.") forState:UIControlStateNormal];
-    [self.toggleButton setTitleColor:isOn ? [UIColor whiteColor] : [HATheme primaryTextColor] forState:UIControlStateNormal];
-    self.toggleButton.backgroundColor = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
+    NSString *toggleTitle = isOn ? HALocalizedString(@"action.turn_off", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity off. Max ~10 chars -- fixed-width pill.") : HALocalizedString(@"action.turn_on", @"Toggle button in an entity detail sheet (light/fan/humidifier), turns the entity on. Max ~10 chars -- fixed-width pill.");
+    if (HAUIIsFrench()) toggleTitle = isOn ? @"\u00C9teindre" : @"Allumer";
+    [self.toggleButton setTitle:toggleTitle forState:UIControlStateNormal];
+    UIColor *toggleBg = isOn ? [HATheme onTintColor] : [HATheme buttonBackgroundColor];
+    UIColor *toggleFg = [HATheme primaryTextColor];
+    if (isOn) {
+        // Pick black or white text from the background brightness: a pale
+        // "on" tint (light colour) made white text unreadable.
+        CGFloat r = 0, g = 0, b = 0, a = 1;
+        if ([toggleBg getRed:&r green:&g blue:&b alpha:&a]) {
+            CGFloat lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            toggleFg = (lum > 0.6 || a < 0.5) ? [UIColor colorWithWhite:0.1 alpha:1.0] : [UIColor whiteColor];
+        } else {
+            toggleFg = [UIColor whiteColor];
+        }
+    }
+    [self.toggleButton setTitleColor:toggleFg forState:UIControlStateNormal];
+    self.toggleButton.backgroundColor = toggleBg;
 
     NSNumber *target = [entity humidifierTargetHumidity];
     NSInteger pct = target ? target.integerValue : 0;
