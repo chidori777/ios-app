@@ -42,6 +42,14 @@
                                  endDate:(NSDate *)endDate
                               completion:(void (^)(NSArray *points, NSError *error))completion;
 
+/// Fetch the full state history (state + attributes) of an entity, oldest first.
+/// Returns array of @{@"timestamp": NSNumber (epoch, last_updated), @"state": NSString,
+/// @"attributes": NSDictionary}. Not downsampled (callers derive series/durations).
+- (void)fetchRawHistoryForEntityId:(NSString *)entityId
+                         startDate:(NSDate *)startDate
+                           endDate:(NSDate *)endDate
+                        completion:(void (^)(NSArray<NSDictionary *> *entries, NSError *error))completion;
+
 /// Clear all cached history data.
 - (void)clearCache;
 

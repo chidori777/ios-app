@@ -10,6 +10,7 @@
 #import "HAGraphView.h"
 #import "HAAttributeRowView.h"
 #import "HAEntityDetailSection.h"
+#import "HAHeatingAnalysis.h"
 
 static const CGFloat kGrabberWidth = 36.0;
 static const CGFloat kGrabberHeight = 5.0;
@@ -53,6 +54,11 @@ static const CGFloat kGraphHeight = 160.0;
 
 // Guards
 @property (nonatomic, assign) BOOL hasLoadedInitialHistory;
+/// "Show outdoor" checkbox above custom graphs, and the thermostat summary.
+@property (nonatomic, strong) UIButton *outdoorToggle;
+@property (nonatomic, strong) UILabel *climateSummaryLabel;
+/// Incremented per custom graph load so stale async results are dropped.
+@property (nonatomic, assign) NSUInteger customGraphGeneration;
 @end
 
 @implementation HAEntityDetailViewController
@@ -217,6 +223,7 @@ static const CGFloat kGraphHeight = 160.0;
     [self.contentStack addArrangedSubview:self.historyContainer];
     // Light sheets stay focused on the controls: no on/off history bar.
     self.historyContainer.hidden = [[self.entity domain] isEqualToString:@"light"] && self.graphEntities.count <= 1;
+    [self setupCustomGraphControls];
 
     // Segmented control: 1h, 6h, 24h (default), 7d
     self.historySegment = [[UISegmentedControl alloc] initWithItems:@[@"1h", @"6h", @"24h", @"7d", @"Custom"]];
@@ -440,6 +447,184 @@ static const CGFloat kGraphHeight = 160.0;
     return [stateBasedDomains containsObject:domain];
 }
 
+#pragma mark - Custom graphs (thermostat, temperature / humidity)
+
+- (BOOL)isClimateGraph {
+    return [[self.entity domain] isEqualToString:@"climate"] && self.entity.attributes[@"current_temperature"] != nil;
+}
+
+- (NSString *)sensorGraphClass {
+    if (![[self.entity domain] isEqualToString:@"sensor"]) return nil;
+    NSString *dc = [self.entity deviceClass];
+    return ([dc isEqualToString:@"temperature"] || [dc isEqualToString:@"humidity"]) ? dc : nil;
+}
+
+- (BOOL)usesCustomGraph {
+    if (self.graphEntities.count > 1) return NO;
+    return [self isClimateGraph] || [self sensorGraphClass] != nil;
+}
+
+- (NSString *)outdoorDeviceClass {
+    NSString *dc = [self sensorGraphClass];
+    return [dc isEqualToString:@"humidity"] ? @"humidity" : @"temperature";
+}
+
+- (BOOL)outdoorOverlayEnabled {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"HAGraphShowOutdoor"];
+}
+
+- (void)updateOutdoorToggleTitle {
+    NSString *box = [self outdoorOverlayEnabled] ? @"☑" : @"☐";
+    [self.outdoorToggle setTitle:[NSString stringWithFormat:@"%@  Afficher l'extérieur", box] forState:UIControlStateNormal];
+}
+
+- (void)outdoorToggleTapped {
+    [[NSUserDefaults standardUserDefaults] setBool:![self outdoorOverlayEnabled] forKey:@"HAGraphShowOutdoor"];
+    [self updateOutdoorToggleTitle];
+    [self loadHistory];
+}
+
+- (void)setupCustomGraphControls {
+    if (![self usesCustomGraph] || self.historyContainer.hidden) return;
+    NSUInteger historyIndex = [self.contentStack.arrangedSubviews indexOfObject:self.historyContainer];
+    if (historyIndex == NSNotFound) return;
+
+    if ([self isClimateGraph]) {
+        self.climateSummaryLabel = [[UILabel alloc] init];
+        self.climateSummaryLabel.numberOfLines = 0;
+        self.climateSummaryLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+        self.climateSummaryLabel.textColor = [HATheme primaryTextColor];
+        [self.contentStack insertArrangedSubview:self.climateSummaryLabel atIndex:historyIndex];
+        historyIndex++;
+        [self updateClimateSummary];
+    }
+
+    BOOL hasOutdoor = [HAHeatingAnalysis outdoorSensorForDeviceClass:[self outdoorDeviceClass]] != nil ||
+                      [HAHeatingAnalysis weatherEntity] != nil;
+    if (hasOutdoor) {
+        self.outdoorToggle = [UIButton buttonWithType:UIButtonTypeSystem];
+        self.outdoorToggle.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+        self.outdoorToggle.titleLabel.font = [UIFont systemFontOfSize:15];
+        [self.outdoorToggle setTitleColor:[HATheme primaryTextColor] forState:UIControlStateNormal];
+        [self.outdoorToggle addTarget:self action:@selector(outdoorToggleTapped) forControlEvents:UIControlEventTouchUpInside];
+        [self.outdoorToggle.heightAnchor constraintEqualToConstant:32].active = YES;
+        [self updateOutdoorToggleTitle];
+        [self.contentStack insertArrangedSubview:self.outdoorToggle atIndex:historyIndex];
+    }
+}
+
+/// Thermostat summary: measured temperature, setpoint, heating now or idle.
+- (void)updateClimateSummary {
+    if (!self.climateSummaryLabel) return;
+    NSDictionary *a = self.entity.attributes;
+    NSMutableArray *parts = [NSMutableArray array];
+    if (a[@"current_temperature"]) [parts addObject:[NSString stringWithFormat:@"Température : %@ °C", a[@"current_temperature"]]];
+    if (a[@"temperature"]) [parts addObject:[NSString stringWithFormat:@"Consigne : %@ °C", a[@"temperature"]]];
+    NSString *action = [a[@"hvac_action"] isKindOfClass:[NSString class]] ? a[@"hvac_action"] : nil;
+    if ([action isEqualToString:@"heating"]) [parts addObject:@"Chauffe en cours"];
+    else if ([action isEqualToString:@"idle"]) [parts addObject:@"Au repos"];
+    else if ([self.entity.state isEqualToString:@"off"]) [parts addObject:@"Arrêté"];
+    self.climateSummaryLabel.text = [parts componentsJoinedByString:@"\n"];
+}
+
+- (NSDictionary *)seriesWithPoints:(NSArray *)points color:(UIColor *)color label:(NSString *)label unit:(NSString *)unit {
+    return @{@"points": points, @"color": color, @"label": label, @"unit": unit ?: @""};
+}
+
+/// Loads the custom graph for [start, end]: one request per source, assembled when all return.
+- (void)loadCustomGraphFrom:(NSDate *)start to:(NSDate *)end {
+    NSUInteger generation = ++self.customGraphGeneration;
+    HAHistoryManager *mgr = [HAHistoryManager sharedManager];
+    dispatch_group_t group = dispatch_group_create();
+    NSMutableDictionary *results = [NSMutableDictionary dictionary];
+    NSTimeInterval endEpoch = [end timeIntervalSince1970];
+    NSString *unitTemp = @"°C";
+    NSUInteger maxPoints = [HAGraphView maxPointsForDevice];
+
+    if ([self isClimateGraph]) {
+        dispatch_group_enter(group);
+        [mgr fetchRawHistoryForEntityId:self.entity.entityId startDate:start endDate:end completion:^(NSArray *entries, NSError *error) {
+            NSArray *safe = entries ?: @[];
+            @synchronized (results) {
+                results[@"current"] = [HAHeatingAnalysis pointsForAttribute:@"current_temperature" fromEntries:safe];
+                results[@"target"] = [HAHeatingAnalysis pointsForAttribute:@"temperature" fromEntries:safe];
+                results[@"bands"] = [HAHeatingAnalysis heatingRangesFromEntries:safe endTime:endEpoch];
+            }
+            dispatch_group_leave(group);
+        }];
+    } else {
+        dispatch_group_enter(group);
+        [mgr fetchHistoryForEntityId:self.entity.entityId startDate:start endDate:end maxPoints:maxPoints completion:^(NSArray *points, NSError *error) {
+            @synchronized (results) { if (points) results[@"self"] = points; }
+            dispatch_group_leave(group);
+        }];
+        HAEntity *humidity = [[self sensorGraphClass] isEqualToString:@"temperature"] ? [HAHeatingAnalysis humiditySiblingOfEntity:self.entity] : nil;
+        if (humidity) {
+            dispatch_group_enter(group);
+            [mgr fetchHistoryForEntityId:humidity.entityId startDate:start endDate:end maxPoints:maxPoints completion:^(NSArray *points, NSError *error) {
+                @synchronized (results) { if (points) results[@"humidity"] = points; }
+                dispatch_group_leave(group);
+            }];
+        }
+    }
+
+    if (self.outdoorToggle && [self outdoorOverlayEnabled]) {
+        NSString *dc = [self outdoorDeviceClass];
+        HAEntity *outdoor = [HAHeatingAnalysis outdoorSensorForDeviceClass:dc];
+        HAEntity *weather = outdoor ? nil : [HAHeatingAnalysis weatherEntity];
+        if (outdoor) {
+            dispatch_group_enter(group);
+            [mgr fetchHistoryForEntityId:outdoor.entityId startDate:start endDate:end maxPoints:maxPoints completion:^(NSArray *points, NSError *error) {
+                @synchronized (results) { if (points) results[@"outdoor"] = points; }
+                dispatch_group_leave(group);
+            }];
+        } else if (weather) {
+            dispatch_group_enter(group);
+            [mgr fetchRawHistoryForEntityId:weather.entityId startDate:start endDate:end completion:^(NSArray *entries, NSError *error) {
+                @synchronized (results) { results[@"outdoor"] = [HAHeatingAnalysis pointsForAttribute:dc fromEntries:entries ?: @[]]; }
+                dispatch_group_leave(group);
+            }];
+        }
+    }
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || generation != strongSelf.customGraphGeneration) return;
+        [strongSelf.graphSpinner stopAnimating];
+        UIColor *blue = [UIColor colorWithRed:0.29 green:0.48 blue:0.85 alpha:1.0];
+        UIColor *yellow = [UIColor colorWithRed:0.95 green:0.71 blue:0.16 alpha:1.0];
+        UIColor *orange = [UIColor colorWithRed:0.97 green:0.58 blue:0.20 alpha:1.0];
+        UIColor *lightBlue = [UIColor colorWithRed:0.30 green:0.65 blue:0.95 alpha:1.0];
+        UIColor *red = [UIColor colorWithRed:0.92 green:0.26 blue:0.24 alpha:1.0];
+        BOOL humidityMode = [[strongSelf sensorGraphClass] isEqualToString:@"humidity"];
+        NSMutableArray *series = [NSMutableArray array];
+        if ([strongSelf isClimateGraph]) {
+            NSArray *current = results[@"current"];
+            NSArray *target = results[@"target"];
+            if (current.count > 1) [series addObject:[strongSelf seriesWithPoints:current color:blue label:@"Température" unit:unitTemp]];
+            if (target.count > 1) [series addObject:[strongSelf seriesWithPoints:target color:yellow label:@"Consigne" unit:unitTemp]];
+        } else {
+            NSArray *own = results[@"self"];
+            NSArray *hum = results[@"humidity"];
+            if (own.count > 1) {
+                [series addObject:[strongSelf seriesWithPoints:own
+                                                         color:(humidityMode ? lightBlue : orange)
+                                                         label:(humidityMode ? @"Humidité" : @"Température")
+                                                          unit:(humidityMode ? @"%" : unitTemp)]];
+            }
+            if (hum.count > 1) [series addObject:[strongSelf seriesWithPoints:hum color:lightBlue label:@"Humidité" unit:@"%"]];
+        }
+        NSArray *outdoor = results[@"outdoor"];
+        if (outdoor.count > 1) {
+            [series addObject:[strongSelf seriesWithPoints:outdoor color:red label:@"Extérieur" unit:(humidityMode ? @"%" : unitTemp)]];
+        }
+
+        strongSelf.graphView.dataSeries = series.count > 0 ? series : nil;
+        strongSelf.graphView.highlightRanges = series.count > 0 ? results[@"bands"] : nil;
+    });
+}
+
 - (void)loadHistory {
     if (!self.entity) return;
 
@@ -454,28 +639,14 @@ static const CGFloat kGraphHeight = 160.0;
         return;
     }
 
-    // Thermostat: plot the measured temperature (current_temperature attribute)
-    // instead of the heat/off state timeline, which carries no curve.
-    if (self.graphEntities.count <= 1 &&
-        [[self.entity domain] isEqualToString:@"climate"] &&
-        self.entity.attributes[@"current_temperature"] != nil) {
+    if ([self usesCustomGraph]) {
         NSDate *endDate = [NSDate date];
         NSDate *startDate = [NSDate dateWithTimeIntervalSinceNow:-[self selectedHoursBack] * 3600];
         if (self.historySegment.selectedSegmentIndex == 4 && self.customStartDate && self.customEndDate) {
             startDate = self.customStartDate;
             endDate = self.customEndDate;
         }
-        __weak typeof(self) weakSelf = self;
-        [[HAHistoryManager sharedManager] fetchAttributeHistoryForEntityId:self.entity.entityId
-                                                                 attribute:@"current_temperature"
-                                                                 startDate:startDate
-                                                                   endDate:endDate
-                                                                completion:^(NSArray *points, NSError *error) {
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (!strongSelf) return;
-            [strongSelf.graphSpinner stopAnimating];
-            if (points.count > 0) strongSelf.graphView.dataPoints = points;
-        }];
+        [self loadCustomGraphFrom:startDate to:endDate];
         return;
     }
 
@@ -863,6 +1034,13 @@ static const CGFloat kGraphHeight = 160.0;
     NSDate *end = [NSDate dateWithTimeIntervalSince1970:self.pendingZoomEnd];
     __weak typeof(self) weakSelf = self;
 
+    // Thermostats / temperature sensors: the generic numeric refetch finds no
+    // numbers in a climate state ("heat") and used to blank the graph.
+    if ([self usesCustomGraph]) {
+        if (self.pendingZoomEnd > self.pendingZoomStart) [self loadCustomGraphFrom:start to:end];
+        return;
+    }
+
     // Multi-entity zoom refetch
     if (self.graphEntities.count > 1) {
         NSArray *graphEntities = [self.graphEntities copy];
@@ -987,6 +1165,7 @@ static const CGFloat kGraphHeight = 160.0;
         [self.domainSection updateWithEntity:updated];
     }
     [self rebuildAttributes];
+    [self updateClimateSummary];
 }
 
 @end

@@ -42,6 +42,12 @@
 /// When set, line graph properties are ignored. Renders horizontal colored bars.
 @property (nonatomic, copy) NSArray<NSDictionary *> *timelineData;
 
+/// Time ranges highlighted as translucent vertical bands behind the lines
+/// (e.g. when a thermostat was heating). Array of @{@"start": epoch, @"end": epoch}.
+@property (nonatomic, copy) NSArray<NSDictionary *> *highlightRanges;
+/// Band colour (default: translucent orange).
+@property (nonatomic, strong) UIColor *highlightColor;
+
 /// Show axis labels (time on bottom, values on left). Default NO.
 @property (nonatomic, assign) BOOL showAxisLabels;
 

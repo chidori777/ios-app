@@ -255,6 +255,74 @@
     return [points copy];
 }
 
+- (void)fetchRawHistoryForEntityId:(NSString *)entityId
+                         startDate:(NSDate *)startDate
+                           endDate:(NSDate *)endDate
+                        completion:(void (^)(NSArray<NSDictionary *> *, NSError *))completion {
+    if (!entityId || !completion) return;
+    if ([[HAAuthManager sharedManager] isDemoMode]) {
+        ha_dispatchMainCompletion(completion, @[], nil);
+        return;
+    }
+    NSString *serverURL = [[HAAuthManager sharedManager] serverURL];
+    NSString *token = [[HAAuthManager sharedManager] accessToken];
+    if (!serverURL || !token) {
+        ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Not configured"]);
+        return;
+    }
+    long startEpoch = (long)[startDate timeIntervalSince1970];
+    long endEpoch = (long)[endDate timeIntervalSince1970];
+    NSString *cacheKey = [NSString stringWithFormat:@"%@#raw_%ld_%ld", entityId, startEpoch, endEpoch];
+    NSArray *cached = [self.cache objectForKey:cacheKey];
+    if (cached) {
+        ha_dispatchMainCompletion(completion, cached, nil);
+        return;
+    }
+    NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
+    fmt.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss";
+    fmt.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
+    fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+    NSString *urlStr = [NSString stringWithFormat:@"%@/api/history/period/%@?end_time=%@&filter_entity_id=%@&significant_changes_only=0",
+                        serverURL, [fmt stringFromDate:startDate], [fmt stringFromDate:endDate], entityId];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) {
+        ha_dispatchMainCompletion(completion, nil, [self errorWithMessage:@"Bad URL"]);
+        return;
+    }
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    [request ha_setAuthHeaders:token];
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || !data) {
+            ha_dispatchMainCompletion(completion, nil, error);
+            return;
+        }
+        NSArray *result = nil;
+        @try {
+            result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        } @catch (NSException *e) {
+            result = nil;
+        }
+        NSArray *states = ([result isKindOfClass:[NSArray class]] && result.count > 0) ? result.firstObject : nil;
+        NSMutableArray *entries = [NSMutableArray array];
+        if ([states isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *entry in states) {
+                if (![entry isKindOfClass:[NSDictionary class]]) continue;
+                id rawTime = entry[@"last_updated"];
+                if (![rawTime isKindOfClass:[NSString class]]) rawTime = entry[@"last_changed"];
+                if (![rawTime isKindOfClass:[NSString class]]) continue;
+                NSDate *date = [HADateUtils dateFromISO8601String:rawTime];
+                if (!date) continue;
+                NSDictionary *attrs = [entry[@"attributes"] isKindOfClass:[NSDictionary class]] ? entry[@"attributes"] : @{};
+                NSString *state = [entry[@"state"] isKindOfClass:[NSString class]] ? entry[@"state"] : @"";
+                [entries addObject:@{@"timestamp": @([date timeIntervalSince1970]), @"state": state, @"attributes": attrs}];
+            }
+        }
+        if (entries.count > 0) [self.cache setObject:entries forKey:cacheKey];
+        ha_dispatchMainCompletion(completion, entries, nil);
+    }];
+    [task resume];
+}
+
 #pragma mark - Request Building
 
 - (NSURLRequest *)requestForEntityId:(NSString *)entityId startDate:(NSDate *)startDate endDate:(NSDate *)endDate minimal:(BOOL)minimal {

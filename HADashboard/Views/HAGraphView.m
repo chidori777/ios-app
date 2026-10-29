@@ -40,6 +40,7 @@ static NSDateFormatter *sCachedTimeFmt(void) {
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSNumber *> *seriesIndexToGroupIndex; // series idx -> group idx
 // Tooltip
 @property (nonatomic, strong) CALayer *crosshairLine;
+@property (nonatomic, strong) CAShapeLayer *highlightLayer;
 @property (nonatomic, strong) UIView *tooltipView;
 @property (nonatomic, strong) UILabel *tooltipValueLabel;
 @property (nonatomic, strong) UILabel *tooltipTimeLabel;
@@ -128,6 +129,11 @@ static NSDateFormatter *sCachedTimeFmt(void) {
         self.legendBottomConstraint,
         self.legendHeightConstraint,
     ]];
+
+    // Highlight bands (heating periods...), below every other layer
+    _highlightLayer = [CAShapeLayer layer];
+    _highlightLayer.fillColor = [[UIColor orangeColor] colorWithAlphaComponent:0.28].CGColor;
+    [self.layer insertSublayer:_highlightLayer atIndex:0];
 
     // Crosshair line (vertical, 1px, hidden until inspection)
     _crosshairLine = [CALayer layer];
@@ -731,6 +737,51 @@ static NSDateFormatter *sCachedTimeFmt(void) {
     } else {
         [self updateSingleSeriesPath];
     }
+    [self updateHighlightLayer];
+}
+
+- (void)setHighlightRanges:(NSArray<NSDictionary *> *)highlightRanges {
+    _highlightRanges = [highlightRanges copy];
+    [self updateHighlightLayer];
+}
+
+- (void)setHighlightColor:(UIColor *)highlightColor {
+    _highlightColor = highlightColor;
+    self.highlightLayer.fillColor = (highlightColor ?: [[UIColor orangeColor] colorWithAlphaComponent:0.28]).CGColor;
+}
+
+/// Draws highlightRanges with the same time→x mapping as the lines
+/// (currentMinTime/currentMaxTime are set by the path updates).
+- (void)updateHighlightLayer {
+    self.highlightLayer.frame = self.bounds;
+    double minTime = self.currentMinTime;
+    double maxTime = self.currentMaxTime;
+    if (self.highlightRanges.count == 0 || self.timelineData.count > 0 || maxTime <= minTime || CGRectIsEmpty(self.bounds)) {
+        self.highlightLayer.path = nil;
+        return;
+    }
+    CGFloat leftPad = [self graphAreaLeftPadding];
+    CGFloat rightPad = [self graphAreaRightPadding];
+    CGFloat bottomPad = [self graphAreaBottomPadding];
+    CGFloat w = self.bounds.size.width - leftPad - rightPad;
+    CGFloat legendH = (self.dataSeries.count > 0) ? [self currentLegendHeight] : 0.0;
+    CGFloat top = 2.0;
+    CGFloat bottom = self.bounds.size.height - legendH - bottomPad;
+    if (w <= 0 || bottom <= top) {
+        self.highlightLayer.path = nil;
+        return;
+    }
+    double xRange = maxTime - minTime;
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    for (NSDictionary *range in self.highlightRanges) {
+        double start = MAX([range[@"start"] doubleValue], minTime);
+        double end = MIN([range[@"end"] doubleValue], maxTime);
+        if (end <= start) continue;
+        CGFloat x0 = leftPad + (CGFloat)((start - minTime) / xRange) * w;
+        CGFloat x1 = leftPad + (CGFloat)((end - minTime) / xRange) * w;
+        [path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(x0, top, MAX(1.0, x1 - x0), bottom - top)]];
+    }
+    self.highlightLayer.path = path.CGPath;
 }
 
 - (void)updateSingleSeriesPath {
