@@ -398,6 +398,7 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
     self.statusLabel.textColor = [HATheme secondaryTextColor];
     self.titleButton.tintColor = [HATheme primaryTextColor];
     self.navigationItem.rightBarButtonItem.tintColor = [HATheme primaryTextColor];
+    [self styleViewPickerAsPills];
 
     // On iOS 9-12, manually style the navigation bar since there is no
     // overrideUserInterfaceStyle to drive appearance automatically.
@@ -498,6 +499,57 @@ static NSString * const kSectionHeaderReuseId = @"HASectionHeader";
         relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeTrailing multiplier:1 constant:-12]];
     [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.viewPicker attribute:NSLayoutAttributeHeight
         relatedBy:NSLayoutRelationEqual toItem:nil attribute:NSLayoutAttributeNotAnAttribute multiplier:1 constant:32]];
+    [self styleViewPickerAsPills];
+}
+
+/// Stretchable rounded-pill image used as a segment background.
+- (UIImage *)pillImageWithColor:(UIColor *)color radius:(CGFloat)radius {
+    CGFloat side = radius * 2.0 + 1.0;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+    [color setFill];
+    [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, side, side) cornerRadius:radius] fill];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return [image resizableImageWithCapInsets:UIEdgeInsetsMake(radius, radius, radius, radius)];
+}
+
+/// Modern "pill" tabs instead of the stock segmented control: each view is a
+/// rounded chip, the selected one filled with the accent colour. Uses only
+/// iOS 9-era UISegmentedControl appearance APIs, so it looks the same on the
+/// legacy universal build and on current iOS (where it also overrides the
+/// iOS 13 sliding-thumb style).
+- (void)styleViewPickerAsPills {
+    UISegmentedControl *picker = self.viewPicker;
+    if (!picker) return;
+    CGFloat radius = 14.0;
+    BOOL dark = [HATheme effectiveDarkMode];
+    UIColor *idle = dark ? [UIColor colorWithWhite:1.0 alpha:0.08] : [UIColor colorWithWhite:0.0 alpha:0.05];
+    UIColor *pressed = dark ? [UIColor colorWithWhite:1.0 alpha:0.16] : [UIColor colorWithWhite:0.0 alpha:0.10];
+    UIColor *accent = [HATheme accentColor];
+
+    [picker setBackgroundImage:[self pillImageWithColor:idle radius:radius] forState:UIControlStateNormal barMetrics:UIBarMetricsDefault];
+    [picker setBackgroundImage:[self pillImageWithColor:pressed radius:radius] forState:UIControlStateHighlighted barMetrics:UIBarMetricsDefault];
+    [picker setBackgroundImage:[self pillImageWithColor:accent radius:radius] forState:UIControlStateSelected barMetrics:UIBarMetricsDefault];
+    [picker setBackgroundImage:[self pillImageWithColor:accent radius:radius] forState:(UIControlStateSelected | UIControlStateHighlighted) barMetrics:UIBarMetricsDefault];
+
+    // Transparent divider with a small gap so the pills read as separate chips.
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(6, 1), NO, 0);
+    UIImage *gap = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    for (NSNumber *left in @[@(UIControlStateNormal), @(UIControlStateSelected), @(UIControlStateHighlighted)]) {
+        for (NSNumber *right in @[@(UIControlStateNormal), @(UIControlStateSelected), @(UIControlStateHighlighted)]) {
+            [picker setDividerImage:gap forLeftSegmentState:left.unsignedIntegerValue rightSegmentState:right.unsignedIntegerValue barMetrics:UIBarMetricsDefault];
+        }
+    }
+
+    [picker setTitleTextAttributes:@{NSForegroundColorAttributeName: [HATheme primaryTextColor],
+                                     NSFontAttributeName: [UIFont systemFontOfSize:14 weight:UIFontWeightMedium]}
+                          forState:UIControlStateNormal];
+    [picker setTitleTextAttributes:@{NSForegroundColorAttributeName: [UIColor whiteColor],
+                                     NSFontAttributeName: [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold]}
+                          forState:UIControlStateSelected];
+    picker.tintColor = accent;
+    picker.backgroundColor = [UIColor clearColor];
 }
 
 - (void)setupCollectionView {
