@@ -518,6 +518,9 @@
 - (void)tileLongPressed:(UILongPressGestureRecognizer *)gesture {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
     if (!self.entity || !self.entity.isAvailable) return;
+    // Thermostats: long press shows heating time (handled by the dashboard),
+    // never a blind toggle that would switch the heating off.
+    if ([[self.entity domain] isEqualToString:@"climate"]) return;
 
     [HAHaptics mediumImpact];
 

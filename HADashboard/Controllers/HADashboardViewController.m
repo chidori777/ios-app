@@ -33,6 +33,8 @@
 #import "HAGlanceCardCell.h"
 #import "HAAction.h"
 #import "HAActionDispatcher.h"
+#import "HAHeatingAnalysis.h"
+#import "HAHistoryManager.h"
 #import "HAMarkdownCardCell.h"
 #import "HAWeatherEntityCell.h"
 #import "HAGaugeCardCell.h"
@@ -2191,6 +2193,21 @@ heightForHeaderInSection:(NSInteger)section {
     NSDictionary *actionDict = props[actionType];
     HAAction *action = [HAAction actionFromDictionary:actionDict];
 
+    // Thermostat long press without a configured hold_action: heating time
+    // today / this week / this month (row may point at it via tap_action.entity).
+    if (!action && [actionType isEqualToString:@"hold_action"]) {
+        HAEntity *climate = [[entity domain] isEqualToString:@"climate"] ? entity : nil;
+        NSDictionary *tap = [props[@"tap_action"] isKindOfClass:[NSDictionary class]] ? props[@"tap_action"] : nil;
+        NSString *overrideId = [tap[@"entity"] isKindOfClass:[NSString class]] ? tap[@"entity"] : nil;
+        if (!climate && [overrideId hasPrefix:@"climate."]) {
+            climate = [[HAConnectionManager sharedManager] entityForId:overrideId];
+        }
+        if (climate) {
+            [self showHeatingRuntimeForEntity:climate];
+            return;
+        }
+    }
+
     // No configured action: apply defaults matching previous hardcoded behavior
     if (!action) {
         if ([actionType isEqualToString:@"tap_action"]) {
@@ -2206,6 +2223,47 @@ heightForHeaderInSection:(NSInteger)section {
     [[HAActionDispatcher sharedDispatcher] executeAction:action
                                               forEntity:entity
                                      fromViewController:self];
+}
+
+- (void)showHeatingRuntimeForEntity:(HAEntity *)climate {
+    [HAHaptics mediumImpact];
+    NSString *title = [NSString stringWithFormat:@"Durée de chauffe · %@", [climate friendlyName] ?: climate.entityId];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+                                                                   message:@"Calcul en cours…"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+
+    NSCalendar *cal = [NSCalendar currentCalendar];
+    cal.firstWeekday = 2; // Monday
+    NSDate *now = [NSDate date];
+    NSDate *dayStart = [cal startOfDayForDate:now];
+    NSDate *weekStart = nil;
+    NSDate *monthStart = nil;
+    [cal rangeOfUnit:NSCalendarUnitWeekOfYear startDate:&weekStart interval:NULL forDate:now];
+    [cal rangeOfUnit:NSCalendarUnitMonth startDate:&monthStart interval:NULL forDate:now];
+    if (!weekStart) weekStart = dayStart;
+    if (!monthStart) monthStart = dayStart;
+    NSDate *fetchStart = [weekStart compare:monthStart] == NSOrderedAscending ? weekStart : monthStart;
+
+    __weak UIAlertController *weakAlert = alert;
+    [[HAHistoryManager sharedManager] fetchRawHistoryForEntityId:climate.entityId startDate:fetchStart endDate:now completion:^(NSArray *entries, NSError *error) {
+        UIAlertController *strongAlert = weakAlert;
+        if (!strongAlert) return;
+        if (!entries) {
+            strongAlert.message = @"Historique indisponible.";
+            return;
+        }
+        NSTimeInterval end = [now timeIntervalSince1970];
+        NSArray *ranges = [HAHeatingAnalysis heatingRangesFromEntries:entries endTime:end];
+        NSString *(^fmt)(NSDate *) = ^NSString *(NSDate *from) {
+            return [HAHeatingAnalysis formattedDuration:[HAHeatingAnalysis heatingSecondsInRanges:ranges start:[from timeIntervalSince1970] end:end]];
+        };
+        strongAlert.message = [NSString stringWithFormat:@"Aujourd'hui : %@
+Cette semaine : %@
+Ce mois-ci : %@",
+                               fmt(dayStart), fmt(weekStart), fmt(monthStart)];
+    }];
 }
 
 - (void)presentEntityDetail:(HAEntity *)entity {
